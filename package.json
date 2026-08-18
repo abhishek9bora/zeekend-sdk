@@ -1,0 +1,26 @@
+{
+  "name": "@zeekend/sdk",
+  "version": "0.2.0",
+  "description": "Sponsored product placements for AI apps. Contextual, labeled, no user data.",
+  "type": "module",
+  "main": "./sdk/zeekend.js",
+  "module": "./sdk/zeekend.js",
+  "exports": {
+    ".": "./sdk/zeekend.js",
+    "./react": "./sdk/react.jsx"
+  },
+  "files": ["sdk", "README.md", "SKILL.md", "LICENSE"],
+  "sideEffects": false,
+  "engines": { "node": ">=18" },
+  "keywords": [
+    "ads", "advertising", "monetization", "ai", "llm", "chatbot",
+    "contextual", "sponsored", "conversational-ads", "publisher"
+  ],
+  "peerDependencies": { "react": ">=17" },
+  "peerDependenciesMeta": { "react": { "optional": true } },
+  "repository": { "type": "git", "url": "git+https://github.com/CHANGEME/zeekend-sdk.git" },
+  "bugs": { "url": "https://github.com/CHANGEME/zeekend-sdk/issues" },
+  "homepage": "https://zeekend.com",
+  "license": "MIT",
+  "publishConfig": { "access": "public" }
+}
