@@ -293,7 +293,15 @@ Zeekend.init = function init(config) {
     wrap.appendChild(lbl);
 
     if (slot.format === 'catalog' && slot.items && slot.items.length) {
+      // The copy is the point. A bare row of product tiles tells the reader
+      // nothing about why these appeared in this conversation.
+      if (slot.headline) { wrap.appendChild(text('div', slot.headline, 'font-weight:600;')); }
+      if (slot.body) { wrap.appendChild(text('div', slot.body, 'opacity:.75;margin:2px 0 9px;font-size:.95em;')); }
       wrap.appendChild(catalog(slot, t));
+      if (slot.advertiser) {
+        wrap.appendChild(text('div', slot.advertiser,
+          'font-size:11px;opacity:.5;margin-top:7px;color:' + t.muted + ';'));
+      }
     } else {
       wrap.appendChild(card(slot, t));
     }
@@ -350,7 +358,8 @@ Zeekend.init = function init(config) {
       var c = el('a');
       c.href = item.clickUrl || slot.clickUrl;
       c.target = '_blank'; c.rel = 'sponsored noopener noreferrer';
-      c.style.cssText = 'flex:0 0 132px;text-decoration:none;color:inherit;display:block;';
+      c.style.cssText = 'flex:0 0 132px;text-decoration:none;color:inherit;display:block;' +
+        (item.image ? '' : 'border:1px solid ' + t.border + ';border-radius:8px;padding:9px 10px;');
       c.onclick = function () { click(slot); };
       if (item.image) {
         var img = el('img');
