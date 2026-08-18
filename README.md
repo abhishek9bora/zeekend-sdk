@@ -204,7 +204,7 @@ is slow, not your app.
 ## Running your own exchange
 
 The reference exchange is not in this package. It lives in the
-[repository](https://github.com/CHANGEME/zeekend-sdk).
+[repository](https://github.com/abhishek9bora/zeekend-exchange).
 
 ```bash
 ANTHROPIC_API_KEY=sk-ant-... node server/server.js

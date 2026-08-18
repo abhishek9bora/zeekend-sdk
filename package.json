@@ -18,8 +18,8 @@
   ],
   "peerDependencies": { "react": ">=17" },
   "peerDependenciesMeta": { "react": { "optional": true } },
-  "repository": { "type": "git", "url": "git+https://github.com/CHANGEME/zeekend-sdk.git" },
-  "bugs": { "url": "https://github.com/CHANGEME/zeekend-sdk/issues" },
+  "repository": { "type": "git", "url": "git+https://github.com/abhishek9bora/zeekend-exchange.git" },
+  "bugs": { "url": "https://github.com/abhishek9bora/zeekend-exchange/issues" },
   "homepage": "https://zeekend.com",
   "license": "MIT",
   "publishConfig": { "access": "public" }
