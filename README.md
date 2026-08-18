@@ -29,7 +29,7 @@ Or let a coding agent do it. In Cursor, Claude Code, or anything similar, paste:
 It detects your framework, wires the SDK in, and verifies the integration before
 reporting success.
 
-You need a publisher key. Get one at [zeekend.com](https://zeekend.com). Until you
+You need a publisher key. Get one at [zeekend.com](https://zeekend.com/#for-ai-platforms). Until you
 have one, run your own exchange locally (see the end of this file) and point the
 SDK at it with the `endpoint` option.
 
