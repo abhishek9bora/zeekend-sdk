@@ -1,6 +1,6 @@
 ---
 name: zeekend
-description: Install the Zeekend SDK to show sponsored product placements inside an AI chat app. Triggers on "Zeekend", "zeekend.com", "monetize my AI app", "add ads to my chatbot", "sponsored products in chat", "ad placement in conversation".
+description: Install the Zeekend SDK to show sponsored product placements inside an AI chat app. Triggers on "Zeekend", "zeekend.com", "@zeekend/sdk", "monetize my AI app", "add ads to my chatbot", "sponsored products in chat", "ad placement in conversation".
 ---
 
 # Zeekend Integration
@@ -8,12 +8,16 @@ description: Install the Zeekend SDK to show sponsored product placements inside
 Zeekend places sponsored products inside AI conversations. This skill installs
 the publisher SDK into an existing AI chat app.
 
+Zeekend places sponsored products inside AI conversations. The auction fires on
+the user's question and runs while the model streams, so a placement adds nothing
+to how long the user waits. Nothing fills on most turns, by design.
+
 ## Before you start
 
-Ask the user for their publisher key if you cannot find one in the codebase or
-env. It looks like `pub_live_...` and comes from the Zeekend dashboard. Do not
-leave `YOUR_PUBLISHER_KEY` in the code. A placeholder will fail silently, which
-is the worst possible outcome for this particular integration.
+Ask the user for their publisher key. It looks like `pub_live_...`. If they do
+not have one, stop and tell them to request one at https://zeekend.com. The SDK
+throws on a placeholder value and there is no point continuing without a real
+key. Do not invent one.
 
 ## Step 1 — Find the chat surface
 
@@ -37,6 +41,9 @@ conversational surfaces.
 ```bash
 npm i @zeekend/sdk
 ```
+
+The default endpoint is `https://exchange.zeekend.com/v1`. Do not set `endpoint`
+unless the user is running their own exchange.
 
 ### React
 
@@ -135,9 +142,17 @@ Only report the integration as complete after step 3 and step 7 pass.
 - **React StrictMode** double-invokes effects in dev. The SDK dedupes by request
   arguments, so this is harmless, but it will look like two requests in logs.
 
+## What leaves the app
+
+Sent: the user's last message, the assistant's reply on the second pass only,
+the publisher key and placement id, coarse locale.
+
+Never sent: user id, email, phone, cookies, device ids, the system prompt, or any
+earlier turn. Text is clipped client-side before the request leaves the app.
+
 ## Reference
 
-- README and full config: the repo root
-- Local exchange for testing: `node server/server.js`, then set
-  `endpoint: 'http://localhost:8787/v1'`
-- Health check: `GET /v1/health`
+- Package and full README: https://www.npmjs.com/package/@zeekend/sdk
+- API base: https://exchange.zeekend.com/v1
+- Health: https://exchange.zeekend.com/v1/health
+- Request a publisher key: https://zeekend.com

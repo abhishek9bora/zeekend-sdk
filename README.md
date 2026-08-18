@@ -21,6 +21,14 @@ Three properties that make this worth a try:
 npm i @zeekend/sdk
 ```
 
+Or let a coding agent do it. In Cursor, Claude Code, or anything similar, paste:
+
+> Read https://exchange.zeekend.com/skill.md and follow its instructions to
+> install Zeekend in this app.
+
+It detects your framework, wires the SDK in, and verifies the integration before
+reporting success.
+
 You need a publisher key. Get one at [zeekend.com](https://zeekend.com). Until you
 have one, run your own exchange locally (see the end of this file) and point the
 SDK at it with the `endpoint` option.
@@ -204,7 +212,7 @@ is slow, not your app.
 ## Running your own exchange
 
 The reference exchange is not in this package. It lives in the
-[repository](https://github.com/abhishek9bora/zeekend-exchange).
+[repository](https://github.com/CHANGEME/zeekend-sdk).
 
 ```bash
 ANTHROPIC_API_KEY=sk-ant-... node server/server.js
