@@ -1,6 +1,6 @@
 {
   "name": "@zeekend/sdk",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Sponsored product placements for AI apps. Contextual, labeled, no user data.",
   "type": "module",
   "main": "./sdk/zeekend.js",
@@ -9,18 +9,46 @@
     ".": "./sdk/zeekend.js",
     "./react": "./sdk/react.jsx"
   },
-  "files": ["sdk", "README.md", "SKILL.md", "LICENSE"],
-  "sideEffects": false,
-  "engines": { "node": ">=18" },
-  "keywords": [
-    "ads", "advertising", "monetization", "ai", "llm", "chatbot",
-    "contextual", "sponsored", "conversational-ads", "publisher"
+  "files": [
+    "sdk",
+    "README.md",
+    "SKILL.md",
+    "LICENSE"
   ],
-  "peerDependencies": { "react": ">=17" },
-  "peerDependenciesMeta": { "react": { "optional": true } },
-  "repository": { "type": "git", "url": "git+https://github.com/abhishek9bora/zeekend-exchange.git" },
-  "bugs": { "url": "https://github.com/abhishek9bora/zeekend-exchange/issues" },
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "ads",
+    "advertising",
+    "monetization",
+    "ai",
+    "llm",
+    "chatbot",
+    "contextual",
+    "sponsored",
+    "conversational-ads",
+    "publisher"
+  ],
+  "peerDependencies": {
+    "react": ">=17"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CHANGEME/zeekend-sdk.git"
+  },
+  "bugs": {
+    "url": "https://github.com/CHANGEME/zeekend-sdk/issues"
+  },
   "homepage": "https://zeekend.com",
   "license": "MIT",
-  "publishConfig": { "access": "public" }
+  "publishConfig": {
+    "access": "public"
+  }
 }

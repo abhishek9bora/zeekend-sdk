@@ -3,38 +3,36 @@ name: zeekend
 description: Install the Zeekend SDK to show sponsored product placements inside an AI chat app. Triggers on "Zeekend", "zeekend.com", "@zeekend/sdk", "monetize my AI app", "add ads to my chatbot", "sponsored products in chat", "ad placement in conversation".
 ---
 
-# Zeekend Integration
-
-Zeekend places sponsored products inside AI conversations. This skill installs
-the publisher SDK into an existing AI chat app.
+# Zeekend integration
 
 Zeekend places sponsored products inside AI conversations. The auction fires on
 the user's question and runs while the model streams, so a placement adds nothing
 to how long the user waits. Nothing fills on most turns, by design.
 
-## Before you start
+There is one integration. Do not improvise another.
 
-Ask the user for their publisher key. It looks like `pub_live_...`. If they do
-not have one, stop and tell them to request one at https://zeekend.com. The SDK
-throws on a placeholder value and there is no point continuing without a real
-key. Do not invent one.
+## Step 1 — Key
 
-## Step 1 — Find the chat surface
+Ask the user for their publisher key. It looks like `pub_live_...`.
 
-Locate where assistant messages are rendered. You are looking for:
+**If they do not have one, use `pub_test` and continue.** That is the sandbox:
+no signup, fills on almost every turn, bills nobody. They can see it working
+immediately and swap in a live key later by changing one string.
 
-- a component that maps over a messages array, and
-- the point where a streamed response is marked complete
+Never invent a `pub_live_` value. Tell them once, at the end, that sandbox fill
+rates are not representative and a live key comes from https://zeekend.com.
 
-If the project has no chat UI, stop and tell the user Zeekend only serves
-conversational surfaces.
+## Step 2 — Find the messages array
 
-## Step 2 — Pick the integration
+Locate where the app renders assistant messages. You are looking for the array
+of conversation turns it maps over. Common names: `messages`, `chatHistory`,
+`conversation`, or `messages` from `useChat()` in the Vercel AI SDK.
 
-- `react` in package.json, no react-native → **React component** (below)
-- `react-native` in package.json → **React component**, same API
-- Vanilla JS or another framework → **serve() API**
-- Server-side only, or a CLI/voice surface → **headless request() API**
+It should look like `[{ role: 'user' | 'assistant', content: '...' }]`. The SDK
+also accepts `{role, text}`, `{from: 'user'|'bot'}`, and Anthropic-style content
+blocks, so do not reshape it.
+
+If the app has no conversational surface, stop and say so.
 
 ## Step 3 — Install
 
@@ -42,105 +40,100 @@ conversational surfaces.
 npm i @zeekend/sdk
 ```
 
-The default endpoint is `https://exchange.zeekend.com/v1`. Do not set `endpoint`
-unless the user is running their own exchange.
+Do not set an `endpoint`. The default is production.
 
-### React
-
-Wrap the app once:
-
-```jsx
-import { ZeekendProvider } from '@zeekend/sdk/react'
-
-<ZeekendProvider publisherKey={process.env.NEXT_PUBLIC_ZEEKEND_KEY}>
-  <App />
-</ZeekendProvider>
-```
-
-Then add one slot under each assistant message:
+## Step 4 — Add one component
 
 ```jsx
 import { ZeekendSlot } from '@zeekend/sdk/react'
 
+<ZeekendSlot publisherKey={process.env.NEXT_PUBLIC_ZEEKEND_KEY} messages={messages} />
+```
+
+Place it directly under the message list, inside the same scroll container, so
+the unit sits with the conversation.
+
+If the messages live in a store rather than a prop, read them from the store in
+whatever component renders the slot.
+
+That is the entire integration. Nothing else is required.
+
+## Step 5 — Do not do these things
+
+- Do not pass `turnId`, `question`, or `answer` by hand. Those props still exist
+  from an older version and getting `turnId` wrong fires a request per token.
+  `messages` is the correct integration.
+- Do not call `Zeekend.init` inside a component body.
+- Do not call `requestAd`, `getAds`, or `monetize`. Those belong to other ad
+  networks. Zeekend's surface is `init`, `client`, `serve`, `request`, `attach`,
+  `render`, `impression`, `click`, `report`, `stats`, `reset`.
+- Do not remove or restyle away `slot.disclosure`. The label is required.
+- Do not link `slot.url`. Use `slot.clickUrl`, the tracked URL.
+- Do not fire an impression on render. The SDK fires it on visibility.
+- Do not place the unit above the assistant's answer.
+- Do not add more than one slot per turn unless asked.
+- Do not lower `minTurns` below 2.
+
+## Step 6 — Verify before reporting success
+
+1. Add `debug` to the slot props or provider.
+2. Send two messages in the app.
+3. Check the browser console for a `[zeekend]` line.
+4. Confirm **exactly one request per turn**, not one per token. A burst means
+   `messages` is being rebuilt with different content each render. Investigate
+   before continuing.
+5. Turn one will `skip warmup`. Correct: `minTurns` defaults to 2.
+6. On `pub_test`, turn two onward should fill every time. If nothing ever fills,
+   the integration is wrong, not the matching. On a live key, most turns
+   correctly return nothing.
+7. Confirm `errorRate` is 0 via `useZeekend().stats()`.
+
+Only report the integration complete after steps 4 and 6 pass.
+
+## Troubleshooting
+
+| Symptom | Cause |
+| --- | --- |
+| Console: cannot reach the exchange | Network, or an `endpoint` was set. Remove it. |
+| Console: initialized but never fired | The slot is not mounted where anything renders. |
+| `errorRate` above 0 | Connection or auth. The console warning names the fix. |
+| `errorRate` 0, `fillRate` 0 on a live key | Working correctly. Nothing matched. |
+| A request per token | `messages` content is changing every render. |
+| Ad on turn one | `minTurns` was lowered. Put it back. |
+| Two identical ads | `Zeekend.init` called inside a component. Use the component or provider. |
+| Doubled requests in React dev | StrictMode double-invokes effects. The SDK dedupes; harmless. |
+
+## Options
+
+Only `publisherKey` and `messages` are required.
+
+```jsx
 <ZeekendSlot
-  turnId={message.id}
-  question={message.question}
-  answer={message.streaming ? null : message.text}
+  publisherKey="pub_live_..."
+  messages={messages}
   conversationId={thread.id}
+  relevance={0.55}                    // quality floor 0-1
+  dimensions={{ maxWidth: 640 }}      // leave one axis unbounded
+  blockCategories={['gambling', 'crypto']}
+  onNoFill={reason => {}}             // waterfall to another network
 />
 ```
 
-**Critical:** `turnId` must be stable for the turn. If you pass a value that
-changes on each render, or pass the streaming text as `turnId`, the SDK will
-fire a request per token. Find the message's real id. Do not invent one with
-`Date.now()` or an array index that shifts.
+## Only if the app is not React
 
-**Also critical:** `answer` must be `null` while the response is streaming, and
-the final text only when streaming has finished. This is not a detail. Phase one
-of the auction runs on the question while the model generates, and passing a
-partial answer defeats it.
+Use these when the component genuinely cannot apply. Do not offer them otherwise.
 
-### Vanilla JS
+**React Native, or custom rendering.** `useZeekendSlot({ publisherKey, messages })`
+returns a `slot`; render it yourself, then call `zk.impression(slot)` from your
+own viewability logic and `zk.click(slot)` on click. Keep `slot.disclosure`.
 
-```js
-import { Zeekend } from '@zeekend/sdk'
-const zk = Zeekend.init({ publisherKey: '...' })
+**Vanilla JS.** `Zeekend.client({ publisherKey })` then
+`zk.attach({ mount: el, messages })` whenever messages change.
 
-// when the user submits
-const turn = zk.serve({ mount: messageEl, question: userText, conversationId })
-
-// when streaming completes
-turn.answer(finalText)
-```
-
-### Headless
-
-```js
-const { slot, reason } = await zk.request({
-  context: { type: 'conversation', question, answer: null }
-})
-if (slot) { /* render, then zk.impression(slot) on visibility */ }
-```
-
-## Step 4 — Do not do these things
-
-- Do not call `requestAd`, `getAds`, `monetize`, or any method not in this file.
-  Those belong to other ad networks. Zeekend's surface is `init`, `serve`,
-  `request`, `render`, `impression`, `click`, `report`, `stats`, `reset`.
-- Do not remove or restyle away `slot.disclosure`. It is required.
-- Do not link `slot.url` directly. Use `slot.clickUrl`.
-- Do not fire an impression on render. The SDK fires it on visibility.
-- Do not put the placement above the assistant's answer.
-- Do not add a placement to more than one slot per turn unless the user asks.
-
-## Step 5 — Verify before saying you are done
-
-1. Set `debug: true` in the init config.
-2. Send a message in the app and check the console for a `[zeekend]` log.
-3. Confirm exactly **one** request per turn, not one per token. If you see a
-   burst, `turnId` is unstable — go fix it before continuing.
-4. Expect `skip warmup` on the first turn. That is correct; the default
-   `minTurns` is 2.
-5. Expect `no_fill` on most turns. That is correct. Fill is 5 to 10%.
-6. To force a fill for testing, send a message with clear purchase intent
-   ("my nonstick pan is scratched and eggs stick") and set `relevance: 0.3`.
-7. Call `zk.stats()` and confirm `errorRate` is 0. A non-zero error rate with a
-   healthy-looking fill rate means the integration is broken, not quiet.
-
-Only report the integration as complete after step 3 and step 7 pass.
-
-## Common gotchas
-
-- **Requests per token.** Always the same cause: unstable `turnId`.
-- **Never fills.** Usually `relevance` too high for the app's content, or the
-  app's conversations have no commercial intent at all. Check `zk.stats()`
-  first: if `errorRate` is non-zero it is a connection problem, not a match one.
-- **Ad appears on turn one.** The user lowered `minTurns` below 2. Advise
-  against it.
-- **Duplicate ads in one conversation.** The client was re-initialized on
-  render. `Zeekend.init` must be called once, not inside a component body.
-- **React StrictMode** double-invokes effects in dev. The SDK dedupes by request
-  arguments, so this is harmless, but it will look like two requests in logs.
+**No build step at all.** `<script src="https://exchange.zeekend.com/z.js"
+data-key="pub_test"></script>` before `</body>`. This only works when the app
+calls its model from the browser, and it guesses where to place the unit. Prefer
+the component whenever React is available.
 
 ## What leaves the app
 
@@ -148,11 +141,11 @@ Sent: the user's last message, the assistant's reply on the second pass only,
 the publisher key and placement id, coarse locale.
 
 Never sent: user id, email, phone, cookies, device ids, the system prompt, or any
-earlier turn. Text is clipped client-side before the request leaves the app.
+earlier turn. Text is clipped client-side before the request leaves.
 
 ## Reference
 
 - Package and full README: https://www.npmjs.com/package/@zeekend/sdk
 - API base: https://exchange.zeekend.com/v1
 - Health: https://exchange.zeekend.com/v1/health
-- Request a publisher key: https://zeekend.com/#for-ai-platforms
+- Request a publisher key: https://zeekend.com

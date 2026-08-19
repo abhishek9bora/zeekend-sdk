@@ -1,120 +1,135 @@
 /**
- * @zeekend/react 0.2.0
- * React bindings. Thin wrapper over @zeekend/sdk, which holds all the logic.
+ * @zeekend/react 0.3.0
+ * React bindings. All the logic lives in @zeekend/sdk; this is lifecycle only.
  *
- *   import { ZeekendProvider, ZeekendSlot } from '@zeekend/react'
+ * The whole integration:
  *
- *   <ZeekendProvider publisherKey="pub_live_...">
- *     <App />
- *   </ZeekendProvider>
+ *   import { ZeekendSlot } from '@zeekend/sdk/react'
  *
- *   // under each assistant message:
- *   <ZeekendSlot
- *     turnId={msg.id}
- *     question={msg.question}
- *     answer={msg.streaming ? null : msg.text}
- *     conversationId={thread.id}
- *   />
+ *   <ZeekendSlot publisherKey="pub_live_..." messages={messages} />
+ *
+ * Drop it under your message list. It reads your existing messages array,
+ * works out the turn boundary itself, fires the auction on the user's question
+ * while your model is still streaming, and renders only when something fits,
+ * which is a minority of turns.
  */
 
-import React, { createContext, useContext, useEffect, useMemo, useRef } from 'react';
-import { Zeekend } from './zeekend.js';
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { Zeekend, deriveContext } from './zeekend.js';
 
 const Ctx = createContext(null);
 
+/** Optional. Use it to set config once for many slots. */
 export function ZeekendProvider({ children, ...config }) {
-  // One client for the whole app. Re-initializing per render would reset the
-  // pacing counters every time, which is how apps end up showing four ads in
-  // one conversation and blaming the network.
-  const client = useMemo(() => Zeekend.init(config), [config.publisherKey]);
+  const client = useMemo(() => Zeekend.client(config), [config.publisherKey]);
   return <Ctx.Provider value={client}>{children}</Ctx.Provider>;
 }
 
-export function useZeekend() {
-  const client = useContext(Ctx);
-  if (!client) { throw new Error('[zeekend] useZeekend must be used inside <ZeekendProvider>'); }
+export function useZeekend(config) {
+  const fromCtx = useContext(Ctx);
+  // Zeekend.client caches by publisher key, so a slot used without a provider
+  // still shares one client and one set of pacing counters.
+  const own = useMemo(
+    () => (fromCtx ? null : Zeekend.client(config || {})),
+    [fromCtx, config && config.publisherKey]
+  );
+  const client = fromCtx || own;
+  if (!client) { throw new Error('[zeekend] pass publisherKey, or wrap in <ZeekendProvider>'); }
   return client;
 }
 
 /**
- * Drop-in slot. Renders nothing until a placement fills, which is most of the time.
- *
  * Props
- *   turnId          required, stable per conversation turn. This is the guard
- *                   that stops a streaming answer from firing a request per token.
- *   question        the user's message for this turn
- *   answer          the assistant's reply, or null while streaming
- *   conversationId  optional, ties follow-up turns together
- *   placementId     optional, names this slot in your reporting
- *   dimensions      optional, { maxWidth, maxHeight }. Leave one axis unbounded
- *                   so more formats are eligible and your fill rate stays up.
- *   onNoFill        optional, for waterfalling to another network
+ *   messages       your existing array. [{role, content}] and most common
+ *                  variants. Everything else is derived from it.
+ *   publisherKey   required unless you used <ZeekendProvider>
+ *   conversationId optional, ties follow-up turns together
+ *   placementId    optional, names this slot in your reporting
+ *   dimensions     optional, { maxWidth, maxHeight }. Leave one axis unbounded
+ *                  so more formats stay eligible and fill stays up.
+ *   onNoFill       optional, for waterfalling to another network
+ *
+ * Streaming needs no handling. Phase one fires the moment a new question
+ * appears. Phase two waits until the assistant's text stops changing.
  */
 export function ZeekendSlot({
-  turnId, question, answer = null, conversationId,
-  placementId = 'chat-main', dimensions, theme, onFill, onNoFill, className
+  messages, publisherKey, conversationId, placementId = 'chat-main',
+  dimensions, theme, onFill, onNoFill, className, settleMs = 700, ...rest
 }) {
-  const zk = useZeekend();
+  const zk = useZeekend({ publisherKey, ...rest });
   const mountRef = useRef(null);
   const turnRef = useRef(null);
-  const requestedTurn = useRef(null);
-  const answeredTurn = useRef(null);
+  const askedFor = useRef(null);
+  const answeredFor = useRef(null);
 
-  // Phase 1: fire on the question, the instant it exists. The auction runs
-  // while your model streams, so the slot is decided before the answer lands.
+  const derived = useMemo(
+    () => deriveContext(messages, conversationId),
+    [messages, conversationId]
+  );
+  const turnId = derived && derived.turnId;
+  const question = derived && derived.context.question;
+  const answer = derived && derived.context.answer;
+
+  // Phase 1 — on the question, before the answer exists. Races your stream.
   useEffect(() => {
-    if (!turnId || !question || !mountRef.current) { return; }
-    if (requestedTurn.current === turnId) { return; }
-    requestedTurn.current = turnId;
+    if (!turnId || !mountRef.current || askedFor.current === turnId) { return; }
+    askedFor.current = turnId;
 
+    if (turnRef.current) { turnRef.current.destroy(); }
     turnRef.current = zk.serve({
       mount: mountRef.current,
       placementId, question, conversationId, dimensions, theme, onFill, onNoFill
     });
+  }, [turnId]);
 
-    return () => { if (turnRef.current) { turnRef.current.destroy(); } };
-  }, [turnId, question]);
-
-  // Phase 2: only if phase 1 came back empty. The assistant's answer is often
-  // where the buying signal actually is.
+  // Phase 2 — only once the assistant's text has stopped changing, and only if
+  // phase 1 came back empty. Debouncing is what removes streaming from the
+  // integrator's hands entirely.
   useEffect(() => {
-    if (!answer || answeredTurn.current === turnId || !turnRef.current) { return; }
-    answeredTurn.current = turnId;
-    turnRef.current.answer(answer);
-  }, [turnId, answer]);
+    if (!turnId || !answer || answeredFor.current === turnId) { return; }
+    const t = setTimeout(() => {
+      if (answeredFor.current === turnId || !turnRef.current) { return; }
+      answeredFor.current = turnId;
+      turnRef.current.answer(answer);
+    }, settleMs);
+    return () => clearTimeout(t);
+  }, [turnId, answer, settleMs]);
+
+  useEffect(() => () => { if (turnRef.current) { turnRef.current.destroy(); } }, []);
 
   return <div ref={mountRef} className={className} />;
 }
 
-/**
- * Headless variant. You render, we decide. Call zk.impression(slot) when your
- * unit becomes visible and zk.click(slot) on click, and keep the disclosure.
- */
-export function useZeekendSlot({ turnId, question, answer = null, conversationId, placementId, dimensions }) {
-  const zk = useZeekend();
-  const [slot, setSlot] = React.useState(null);
-  const [reason, setReason] = React.useState(null);
-  const requestedTurn = useRef(null);
-  const answeredTurn = useRef(null);
+/** Headless. You render, we decide. Same derivation, no DOM. */
+export function useZeekendSlot({ messages, publisherKey, conversationId, placementId, dimensions, settleMs = 700, ...rest }) {
+  const zk = useZeekend({ publisherKey, ...rest });
+  const [slot, setSlot] = useState(null);
+  const [reason, setReason] = useState(null);
+  const askedFor = useRef(null);
+  const answeredFor = useRef(null);
+
+  const derived = useMemo(() => deriveContext(messages, conversationId), [messages, conversationId]);
+  const turnId = derived && derived.turnId;
 
   useEffect(() => {
-    if (!turnId || !question || requestedTurn.current === turnId) { return; }
-    requestedTurn.current = turnId;
+    if (!turnId || askedFor.current === turnId) { return; }
+    askedFor.current = turnId;
     setSlot(null); setReason(null);
     zk.request({
       placementId, dimensions,
-      context: { type: 'conversation', question, answer: null, conversationId }
+      context: { ...derived.context, answer: null }
     }).then(r => { setSlot(r.slot); setReason(r.reason); });
-  }, [turnId, question]);
+  }, [turnId]);
 
   useEffect(() => {
-    if (!answer || answeredTurn.current === turnId || slot) { return; }
-    answeredTurn.current = turnId;
-    zk.request({
-      placementId, dimensions, _secondPass: true,
-      context: { type: 'conversation', question, answer, conversationId }
-    }).then(r => { if (r.slot) { setSlot(r.slot); } else { setReason(r.reason); } });
-  }, [turnId, answer]);
+    if (!turnId || !derived || !derived.context.answer || slot || answeredFor.current === turnId) { return; }
+    const t = setTimeout(() => {
+      answeredFor.current = turnId;
+      zk.request({ placementId, dimensions, _secondPass: true, context: derived.context })
+        .then(r => { if (r.slot) { setSlot(r.slot); } else { setReason(r.reason); } });
+    }, settleMs);
+    return () => clearTimeout(t);
+  }, [turnId, derived && derived.context.answer]);
 
   return { slot, reason, zk };
 }

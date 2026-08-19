@@ -1,162 +1,111 @@
-# Zeekend SDK
+# Zeekend
 
-Sponsored product placements for AI apps. When someone tells your assistant
-their pan is scratched, Zeekend can put the right pan in front of them, labeled,
-at the moment it helps.
-
-Three properties that make this worth a try:
+Sponsored product placements for AI apps. When someone tells your assistant their
+pan is scratched, Zeekend can put the right pan in front of them, labeled, at the
+moment it helps.
 
 - **Zero perceived latency.** The auction fires on the user's question and runs
   while your model streams. The slot is decided before your answer finishes.
-- **Nothing fills most of the time.** Ads serve on maybe 5 to 10% of turns.
-  That is the design, not a bug. Turn `relevance` down if you want more.
+- **Nothing fills most of the time.** Roughly 5 to 10% of turns. That is the
+  design, not a bug.
 - **No user data.** We get the last question, optionally the answer, and your
   publisher key. No identity, no cookies, no cross-app profile.
 
 ---
 
-## Install
+## Quickstart
 
 ```bash
 npm i @zeekend/sdk
 ```
 
-Or let a coding agent do it. In Cursor, Claude Code, or anything similar, paste:
-
-> Read https://exchange.zeekend.com/skill.md and follow its instructions to
-> install Zeekend in this app.
-
-It detects your framework, wires the SDK in, and verifies the integration before
-reporting success.
-
-You need a publisher key. Get one at [zeekend.com](https://zeekend.com/#for-ai-platforms). Until you
-have one, run your own exchange locally (see the end of this file) and point the
-SDK at it with the `endpoint` option.
-
-## React
-
 ```jsx
-import { ZeekendProvider, ZeekendSlot } from '@zeekend/sdk/react'
+import { ZeekendSlot } from '@zeekend/sdk/react'
 
-<ZeekendProvider publisherKey="pub_live_...">
-  <App />
-</ZeekendProvider>
-
-// under each assistant message
-<ZeekendSlot
-  turnId={msg.id}                              // stable per turn. required.
-  question={msg.question}
-  answer={msg.streaming ? null : msg.text}     // null while streaming
-  conversationId={thread.id}
-/>
+<ZeekendSlot publisherKey="pub_test" messages={messages} />
 ```
 
-That is the whole integration. `turnId` is the guard that stops a streaming
-answer from firing a request per token, so it must be stable for the turn.
+Drop it under your message list. That is the whole integration.
 
-## Vanilla JS
+`pub_test` is the sandbox key. No signup, no waiting. It fills on almost every
+turn so you can see it working in your own app in about two minutes, and it bills
+nobody. When you have seen it work, get a live key at
+[zeekend.com](https://zeekend.com) and change that one string.
 
-```js
-import { Zeekend } from '@zeekend/sdk'
+Sandbox fill rates are not real. Live fill is closer to 5 to 10%, because most
+turns genuinely deserve nothing.
 
-const zk = Zeekend.init({ publisherKey: 'pub_live_...' })
+### What `messages` needs to be
 
-// the moment the user hits enter
-const turn = zk.serve({
-  mount: messageEl,
-  question: userText,
-  conversationId: threadId
-})
+Your existing array. `[{ role, content }]`, and the common variants
+(`{role, text}`, `{from: 'user'|'bot'}`, Anthropic-style content blocks). If you
+use `useChat()` from the Vercel AI SDK, pass its `messages` straight in.
 
-// when your assistant finishes streaming
-turn.answer(finalText)
-```
-
-`serve()` runs two phases. Phase one matches on the question alone, while your
-model is still generating. If nothing fills, phase two runs again with the
-answer included, because the diagnosis in the answer is often the real buying
-signal. The second render replaces the first.
-
-## Headless
-
-Build your own unit and keep full control of your UI.
-
-```js
-const { slot, reason } = await zk.request({
-  context: { type: 'conversation', question, answer: null }
-})
-
-if (slot) {
-  renderYourOwnCard(slot)   // slot.headline, .body, .price, .image, .clickUrl
-  zk.impression(slot)       // call when 50% visible for 1s
-  // zk.click(slot) on click
-}
-```
-
-Two rules if you render your own: use `slot.clickUrl`, not `slot.url`, and keep
-the `slot.disclosure` label visible. Everything else is yours.
+Everything else is derived from it: which turn this is, what the question was,
+whether the assistant is still streaming. There is no turn id to keep stable and
+no streaming flag to thread through.
 
 ---
 
-## Config
+## Options
 
-```js
-Zeekend.init({
-  publisherKey: 'pub_live_...',
+Only `publisherKey` and `messages` are required.
 
-  relevance: 0.55,        // quality floor 0-1. higher = fewer, better, less fill
-  minTurns: 2,            // no ad before the conversation warms up
-  turnGap: 2,             // user turns between placements
-  maxPerSession: 3,
-
-  blockCategories: ['gambling', 'crypto', 'supplements', 'politics'],
-  blockAdvertisers: ['competitor.com'],
-
-  timeoutMs: 1500,        // never blocks your app; on timeout, renders nothing
-  debug: false
-})
+```jsx
+<ZeekendSlot
+  publisherKey="pub_live_..."
+  messages={messages}
+  conversationId={thread.id}
+  relevance={0.55}                    // quality floor 0-1. higher = fewer, better
+  dimensions={{ maxWidth: 640 }}      // leave one axis unbounded
+  blockCategories={['gambling', 'crypto']}
+  onNoFill={reason => showBackupNetwork()}
+/>
 ```
 
 `relevance` is the setting that matters. At 0.55 you serve on strong matches
-only. At 0.35 you roughly double fill and the placements feel looser. Move it
-based on your own numbers, not ours.
+only. At 0.35 you roughly double fill and placements feel looser. Move it on your
+own numbers, not ours.
 
-## Sizing
+Rendering several slots, or want config in one place:
 
-You do not pick a format. Tell us how much room the slot has and we serve what
-fits: a product card, a scrolling catalog, or a plain text mention.
-
-```js
-zk.serve({ dimensions: { maxWidth: 640 } })   // leave height unbounded
+```jsx
+<ZeekendProvider publisherKey="pub_live_..." relevance={0.5}>
+  <App />
+</ZeekendProvider>
 ```
 
-Leave at least one axis unbounded. A wider pool of eligible formats means a
-higher fill rate.
+---
 
-## Waterfall to another network
-
-```js
-zk.serve({
-  mount: el,
-  question,
-  onFill:   slot   => {},
-  onNoFill: reason => showBackupNetwork(el)
-})
-```
-
-`reason` is one of `no_fill`, `warmup`, `frequency_cap`, `session_cap`,
-`timeout`, `error`. The first four are normal. The last two are us being broken,
-and they are deliberately never conflated with the others.
-
-## Monitoring
+## Checking it works
 
 ```js
-zk.stats()
-// { requests, fills, fillRate, errors, timeouts, errorRate, p50, p95 }
+import { useZeekend } from '@zeekend/sdk/react'
+const zk = useZeekend()
+zk.stats()   // { requests, fills, fillRate, errors, timeouts, errorRate, p50, p95 }
 ```
 
-Watch `errorRate`, not just `fillRate`. A broken integration and a quiet one
-look identical from the outside, which is exactly why these are separate counters.
+Watch `errorRate`, not just `fillRate`. A broken integration and a quiet one look
+identical from outside, which is exactly why they are separate counters.
+
+| What you see | What it means |
+| --- | --- |
+| `errorRate` above 0 | Connection or auth. The console warning names the fix. |
+| `errorRate` 0, `fillRate` 0 | Working. Nothing matched. Lower `relevance`. |
+| `requests` 0 | The slot is not mounted where anything renders. |
+
+The SDK warns in the console, without `debug`, when it cannot reach the exchange,
+when your key is rejected, and when it loads but never fires. Silence is never a
+valid state.
+
+## Your earnings
+
+```bash
+curl https://exchange.zeekend.com/v1/publisher/stats \
+  -H "x-publisher-key: pub_live_..."
+```
+
+Impressions, clicks, and what you have earned. No dashboard, no emailing us.
 
 ---
 
@@ -165,67 +114,73 @@ look identical from the outside, which is exactly why these are separate counter
 | Sent | Never sent |
 | --- | --- |
 | The user's last message | User id, email, phone |
-| The assistant's reply (phase 2 only) | Cookies, device ids, IP fingerprints |
+| The assistant's reply, second pass only | Cookies, device ids |
 | Your publisher key and placement id | Your system prompt |
 | Coarse locale | Anything from earlier turns |
 
-Text is clipped client-side before the request leaves your app: 2,000 chars of
-question, 4,000 of answer. Read `trimContext()` in the source if you want to
-verify that rather than take our word for it.
+Text is clipped in your app before the request leaves: 2,000 characters of
+question, 4,000 of answer. Read `trimContext()` in the source rather than taking
+our word for it.
 
 ## Ad safety
 
-Every unit ships with a Report control, no integration work. Reports go
-straight to us and the advertiser gets pulled from your app.
+Every unit ships with a Report control, no integration work. Reports reach us and
+the advertiser is pulled from your app.
 
-Generated copy is fenced by the advertiser's own claim rules: required phrases
-must appear verbatim, banned words are stripped server-side after generation.
-We do not let a model invent facts about someone's product.
+Generated copy is fenced by each advertiser's own claim rules: required phrases
+must appear verbatim, banned words are stripped server-side after generation. We
+do not let a model invent facts about someone's product.
 
-The exchange scores every candidate at zero when the conversation involves
-health, safety, injury, or money trouble. If your users are having a bad day,
-you earn nothing on that turn.
+The exchange scores every candidate at zero when a conversation involves health,
+safety, injury, or money trouble. If your users are having a bad day, you earn
+nothing on that turn.
+
+## Billing
+
+- An impression is 50% of the unit visible for one continuous second.
+- Rendering is not an impression. Prefetching is never an impression.
+- One impression and one click per slot, ever, enforced server-side.
+- A click with no prior impression is invalid traffic and bills nothing.
+
+Publishers earn a CPM on viewable impressions. Advertisers pay CPA on confirmed
+orders. We carry the spread.
 
 ---
 
-## Troubleshooting
+## Custom rendering
 
-**No ads ever appear.** Check the browser console. The SDK warns once, loudly,
-when it cannot reach the exchange or when your key is rejected — those warnings
-are not gated behind `debug`. Then check `zk.stats()`:
+If you want the unit to match your app exactly, or you are on React Native where
+there is no DOM:
 
-| What you see | What it means |
-| --- | --- |
-| `errorRate` above 0 | Connection or auth problem. Read the console warning. |
-| `errorRate` 0, `fillRate` 0 | Working correctly, nothing matched. Try lowering `relevance`. |
-| `fills` 0 and `requests` 0 | Pacing. First turn is `warmup` by default. |
+```jsx
+import { useZeekendSlot } from '@zeekend/sdk/react'
 
-**Requests firing on every token.** In React, `turnId` is not stable across
-renders. It must be the message's real id, not an array index or `Date.now()`.
+const { slot } = useZeekendSlot({ publisherKey: 'pub_live_...', messages })
 
-**An ad appears on turn one.** `minTurns` was lowered below 2. Don't.
-
-**Timeouts.** Default `timeoutMs` is 8000, which is generous because the request
-races your model's stream and blocks nothing. If you see timeouts, your exchange
-is slow, not your app.
-
-## Running your own exchange
-
-The reference exchange is not in this package. It lives in the
-[repository](https://github.com/CHANGEME/zeekend-sdk).
-
-```bash
-ANTHROPIC_API_KEY=sk-ant-... node server/server.js
-Zeekend.init({ publisherKey: 'pub_test', endpoint: 'http://localhost:8787/v1' })
+if (slot) {
+  // slot.headline, slot.body, slot.price, slot.image, slot.clickUrl
+  // call zk.impression(slot) when it is 50% visible for 1s
+  // call zk.click(slot) on click
+}
 ```
 
-Without an API key it falls back to keyword matching and prints
-`model scoring: OFF`. It will still serve ads. They will not be good ones. Check
-`GET /v1/health` before trusting any number it produces.
+Two rules: use `slot.clickUrl`, not `slot.url`, and keep `slot.disclosure`
+visible. Everything else is yours.
+
+## Not using React?
+
+```js
+import { Zeekend } from '@zeekend/sdk'
+const zk = Zeekend.client({ publisherKey: 'pub_live_...' })
+
+zk.attach({ mount: messageEl, messages })   // call whenever messages change
+```
+
+Repeat calls within a turn are ignored, so wire it into your render loop.
 
 ## Protocol
 
-If you would rather not use the SDK:
+If you would rather not use the SDK at all:
 
 ```
 POST /v1/slot        -> 200 + slot object, or 204 No Content for no fill
@@ -237,23 +192,4 @@ GET  /v1/health
 204 means nothing matched. Any 4xx or 5xx means we are broken. Treat them
 differently.
 
-## Billing rules
-
-- An impression is 50% of the unit visible for one continuous second.
-- Rendering is not an impression. Prefetching is never an impression.
-- One impression and one click per slot, ever, enforced server-side.
-- A click with no prior impression is invalid traffic and bills nothing.
-
-Publishers earn a CPM on viewable impressions. Advertisers pay CPA on confirmed
-orders. We carry the spread between them, which is the only arrangement a brand
-will test cold and the only one that lets you forecast revenue.
-
-## Local development
-
-```bash
-ZK_DEMO=1 ANTHROPIC_API_KEY=sk-ant-... node server/server.js
-```
-
-`ZK_DEMO=1` serves the example app at `/paddock` and the advertiser console at
-`/console`. Leave it unset anywhere public: the demo chat proxy calls Anthropic
-with your key and has no authentication.
+Base URL `https://exchange.zeekend.com/v1`.

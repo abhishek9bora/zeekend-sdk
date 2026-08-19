@@ -58,12 +58,29 @@ var VALID_CONTEXT = ['conversation', 'article', 'feed', 'static'];
 function Zeekend() {}
 Zeekend.version = VERSION;
 
+/* One client per publisher key, reused. Calling init twice with the same key
+   would otherwise reset the pacing counters, which is how an app ends up
+   showing four ads in one conversation and blaming the network. */
+var CLIENTS = {};
+Zeekend.client = function (config) {
+  var k = (config && config.publisherKey) || 'default';
+  if (!CLIENTS[k]) { CLIENTS[k] = Zeekend.init(config); }
+  return CLIENTS[k];
+};
+
 Zeekend.init = function init(config) {
   var cfg = assign({}, DEFAULTS, config || {});
   if (!cfg.publisherKey && !cfg.transport) {
     throw new Error('[zeekend] publisherKey is required. Get one at https://zeekend.com');
   }
-  if (/YOUR_|xxx|placeholder|pub_live_\.\.\./i.test(String(cfg.publisherKey))) {
+  if (/^pub_(test|sandbox|demo)$/.test(String(cfg.publisherKey))) {
+    if (typeof console !== 'undefined') {
+      console.log('%c[zeekend] sandbox mode', 'font-weight:600',
+        '\n  Ads will fill on almost every turn so you can see it working.',
+        '\n  Real fill runs closer to 5-10%. Nothing is billed.',
+        '\n  Get a live key at https://zeekend.com');
+    }
+  } else if (/YOUR_|xxx|placeholder|pub_live_\.\.\./i.test(String(cfg.publisherKey))) {
     throw new Error('[zeekend] publisherKey looks like a placeholder: "' +
       cfg.publisherKey + '". Nothing will ever fill with this value.');
   }
@@ -436,12 +453,120 @@ Zeekend.init = function init(config) {
     state.sessionId = rid('ses'); cache = {}; seen = {};
   }
 
+  /**
+   * attach — the vanilla equivalent of <ZeekendSlot>. Call it whenever your
+   * messages change, as often as you like. It works out the turn boundary,
+   * fires phase one on a new question, waits for the assistant's text to settle
+   * before phase two, and ignores repeat calls within the same turn.
+   *
+   *   zk.attach({ mount: el, messages })
+   */
+  var attached = { turnId: null, turn: null, answerTimer: null, answered: null };
+  function attach(opts) {
+    opts = opts || {};
+    var d = deriveContext(opts.messages, opts.conversationId);
+    if (!d) { return null; }
+
+    if (attached.turnId !== d.turnId) {
+      attached.turnId = d.turnId;
+      if (attached.turn) { attached.turn.destroy(); }
+      attached.turn = serve({
+        mount: opts.mount,
+        placementId: opts.placementId,
+        question: d.context.question,
+        conversationId: opts.conversationId,
+        dimensions: opts.dimensions,
+        theme: opts.theme,
+        onFill: opts.onFill,
+        onNoFill: opts.onNoFill
+      });
+    }
+
+    // Debounce phase two until the answer stops growing. This is what removes
+    // streaming from the integrator's hands.
+    if (d.context.answer && attached.answered !== d.turnId) {
+      if (attached.answerTimer) { clearTimeout(attached.answerTimer); }
+      var turnId = d.turnId, answer = d.context.answer, turn = attached.turn;
+      attached.answerTimer = setTimeout(function () {
+        if (attached.answered === turnId || !turn) { return; }
+        attached.answered = turnId;
+        turn.answer(answer);
+      }, opts.settleMs || 700);
+    }
+    return attached.turn;
+  }
+
   return {
-    request: request, serve: serve, render: render,
+    request: request, serve: serve, render: render, attach: attach,
     impression: impression, click: click, report: report,
     stats: stats, reset: reset, config: cfg, state: state
   };
 };
+
+
+/**
+ * Derive everything the exchange needs from a plain messages array.
+ *
+ * Almost every chat app already has [{role, content}, ...] in hand. Asking a
+ * developer to also produce a stable turnId, pull out the matching question,
+ * and null the answer while streaming is three chances to get it wrong, and
+ * getting turnId wrong fires a request per token. So take the array and work
+ * it out here instead.
+ *
+ * Accepts common shapes: {role, content}, {role, text}, {from:'user'|'bot'}.
+ */
+function deriveContext(messages, conversationId) {
+  var list = (messages || []).map(normalizeMessage).filter(function (m) { return m; });
+  var lastUser = null, lastAssistant = null, userIndex = -1;
+  for (var i = list.length - 1; i >= 0; i--) {
+    if (!lastAssistant && list[i].role === 'assistant') { lastAssistant = list[i]; }
+    if (!lastUser && list[i].role === 'user') { lastUser = list[i]; userIndex = i; }
+    if (lastUser) { break; }
+  }
+  if (!lastUser) { return null; }
+
+  // The assistant reply only counts if it came AFTER the question we matched.
+  var answer = null;
+  for (var j = userIndex + 1; j < list.length; j++) {
+    if (list[j].role === 'assistant' && list[j].content) { answer = list[j].content; }
+  }
+
+  return {
+    // Stable for the turn: derived from the question's position and text, so it
+    // does not change as the assistant streams tokens after it.
+    turnId: 't' + userIndex + '_' + hash(lastUser.content),
+    context: {
+      type: 'conversation',
+      question: lastUser.content,
+      answer: answer,
+      conversationId: conversationId
+    }
+  };
+}
+
+function normalizeMessage(m) {
+  if (!m) { return null; }
+  var role = m.role || m.from || m.sender || '';
+  role = String(role).toLowerCase();
+  if (role === 'human' || role === 'you') { role = 'user'; }
+  if (role === 'bot' || role === 'ai' || role === 'model') { role = 'assistant'; }
+  if (role !== 'user' && role !== 'assistant') { return null; }
+  var content = m.content != null ? m.content : (m.text != null ? m.text : m.message);
+  if (typeof content !== 'string') {
+    // Anthropic-style content blocks
+    if (Array.isArray(content)) {
+      content = content.map(function (b) { return b && b.type === 'text' ? b.text : ''; }).join('');
+    } else { return null; }
+  }
+  if (!content) { return null; }
+  return { role: role, content: content };
+}
+
+function hash(s) {
+  var h = 0;
+  for (var i = 0; i < s.length; i++) { h = ((h << 5) - h + s.charCodeAt(i)) | 0; }
+  return Math.abs(h).toString(36);
+}
 
 /* ---------------------------------------------------------------- utils -- */
 
@@ -513,7 +638,9 @@ function safeLocale() {
 function el(tag) { return document.createElement(tag); }
 function text(tag, str, css) { var n = el(tag); n.textContent = str; n.style.cssText = css; return n; }
 
-if (typeof module !== 'undefined' && module.exports) { module.exports = { Zeekend: Zeekend }; }
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { Zeekend: Zeekend, deriveContext: deriveContext };
+}
 if (typeof window !== 'undefined') { window.Zeekend = Zeekend; }
-export { Zeekend };
+export { Zeekend, deriveContext };
 export default Zeekend;
