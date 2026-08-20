@@ -95,6 +95,24 @@ Zeekend.init = function init(config) {
   // Separate counters, because a network that cannot tell "nothing matched"
   // from "we are broken" will report a healthy fill rate while dead.
   var health = { requests: 0, fills: 0, noFills: 0, errors: 0, timeouts: 0, latencies: [] };
+
+  /* If init() runs but no placement is ever requested, the slot was never
+     mounted or was mounted where nothing renders. That failure is completely
+     silent otherwise, and it looks identical to "your matching is bad". */
+  if (typeof setTimeout !== 'undefined') {
+    var idleCheck = setTimeout(function () {
+      if (health.requests > 0) { return; }
+      warnOnce('never-fired',
+        'initialized, but no placement was ever requested.\n' +
+        '  The slot is probably not mounted, or is mounted where it never renders.\n' +
+        '  React:   <ZeekendSlot publisherKey="..." messages={messages} />\n' +
+        '  Vanilla: zk.attach({ mount: el, messages })\n' +
+        '  Docs:    https://exchange.zeekend.com/skill.md');
+    }, 60000);
+    // Never hold a Node process open. A library that stops your server from
+    // exiting is a library people rip out.
+    if (idleCheck && typeof idleCheck.unref === 'function') { idleCheck.unref(); }
+  }
   var cache = {};
   var seen = {};   // slotId -> { impression: bool, click: bool }
 
@@ -209,6 +227,28 @@ Zeekend.init = function init(config) {
       relevance: opts.relevance
     };
 
+    /* Phase one fires the moment the user hits enter, which is the whole point:
+       the auction runs while the model streams. But at that instant the
+       assistant's message element usually does not exist yet, so rendering
+       immediately puts the unit above an answer that then grows underneath it.
+       Hold the render until the mount point has content, or briefly, whichever
+       comes first. */
+    function renderWhenSettled(slot) {
+      if (!mount) { return; }
+      var start = nowMs();
+      var startedEmpty = !mount.textContent || !mount.textContent.trim();
+      (function wait() {
+        var hasContent = mount.textContent && mount.textContent.trim().length > 0;
+        var grew = !startedEmpty || hasContent;
+        if (grew || nowMs() - start > 4000) {
+          settled = true;
+          el = render(slot, mount, opts);
+          return;
+        }
+        setTimeout(wait, 120);
+      })();
+    }
+
     var first = request(assign({}, base, {
       context: {
         type: 'conversation',
@@ -217,7 +257,7 @@ Zeekend.init = function init(config) {
         conversationId: opts.conversationId
       }
     })).then(function (r) {
-      if (r.slot && mount) { settled = true; el = render(r.slot, mount, opts); }
+      if (r.slot && mount) { renderWhenSettled(r.slot); }
       if (opts.onFill && r.slot) { opts.onFill(r.slot); }
       if (opts.onNoFill && !r.slot) { opts.onNoFill(r.reason); }
       return r;

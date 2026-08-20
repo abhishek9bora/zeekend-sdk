@@ -56,6 +56,9 @@ export function ZeekendSlot({
   messages, publisherKey, conversationId, placementId = 'chat-main',
   dimensions, theme, onFill, onNoFill, className, settleMs = 700, ...rest
 }) {
+  /* The unit renders into this component's own div, so where you place
+     <ZeekendSlot> is where the ad appears. Put it AFTER your message list, not
+     inside it, or the ad will sit above an answer that is still streaming. */
   const zk = useZeekend({ publisherKey, ...rest });
   const mountRef = useRef(null);
   const turnRef = useRef(null);
