@@ -148,4 +148,4 @@ earlier turn. Text is clipped client-side before the request leaves.
 - Package and full README: https://www.npmjs.com/package/@zeekend/sdk
 - API base: https://exchange.zeekend.com/v1
 - Health: https://exchange.zeekend.com/v1/health
-- Request a publisher key: https://zeekend.com
+- Request a publisher key: https://zeekend.com/#for-ai-platforms
