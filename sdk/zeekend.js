@@ -27,6 +27,17 @@ var VERSION = '0.2.0';
 var DEFAULTS = {
   endpoint: 'https://exchange.zeekend.com/v1',
 
+  /* Optional. A zeekend-publisher app key (from that dashboard's /apps page),
+     completely separate from publisherKey above — the exchange bills and
+     serves ads, zeekend-publisher just gets a copy of request/impression/
+     click *counts* for your own analytics dashboard. Omit it and nothing
+     changes: no second network call, no behavior difference. It can never
+     carry real revenue (the exchange deliberately never sends CPM/bid data
+     to the client — see server.js's runAuction), so that dashboard's $
+     figures come from a separate, exchange-side pull, not from here. */
+  zeekendAppKey: null,
+  trackingEndpoint: 'https://publisher.zeekend.com',
+
   // Publisher-side quality floor, 0 to 1. Higher means fewer, better matches
   // and a lower fill rate. This is the single most consequential setting in
   // this file. Start at 0.55 and move it based on your own numbers.
@@ -184,8 +195,14 @@ Zeekend.init = function init(config) {
       .then(function (slot) {
         health.latencies.push(nowMs() - t0);
         cache[key] = { t: Date.now(), slot: slot };
+        // Prefetch warms the cache without representing a real ad
+        // opportunity shown to anyone — same exclusion billing/pacing
+        // already make above, applied here too so zeekend-publisher's
+        // fill-rate isn't inflated by requests nothing ever saw.
+        if (!prefetch) { trackEvent('request', { placementId: payload.placementId, wasFilled: !!slot }); }
         if (!slot) { health.noFills += 1; return skip('no_fill'); }
         health.fills += 1;
+        slot.placementId = payload.placementId; // stashed for impression()/click(), which only receive the slot
         return fill(slot, prefetch);
       })
       .catch(function (err) {
@@ -304,7 +321,27 @@ Zeekend.init = function init(config) {
     var s = seen[slot.slotId] || (seen[slot.slotId] = {});
     if (s[type]) { return Promise.resolve(); }
     s[type] = true;
+    if (type === 'impression') {
+      trackEvent('impression', {
+        id: slot.slotId, placementId: slot.placementId,
+        advertiserName: slot.advertiser, creativeHeadline: slot.headline
+      });
+    } else if (type === 'click') {
+      trackEvent('click', { impressionId: slot.slotId, isOutbound: true });
+    }
     return beacon(type, slot);
+  }
+
+  /* Fire-and-forget copy of request/impression/click to zeekend-publisher,
+     entirely separate from beacon() above (different server, different key,
+     different payload shape — see DEFAULTS.zeekendAppKey). A no-op whenever
+     zeekendAppKey isn't configured, so an integration that only cares about
+     the exchange never makes this extra call at all. */
+  function trackEvent(type, data) {
+    if (!cfg.zeekendAppKey) { return; }
+    var body = assign({ type: type }, data);
+    post(cfg.trackingEndpoint + '/api/sdk/v1/event', body, cfg.timeoutMs,
+      { 'x-zeekend-app-key': cfg.zeekendAppKey })['catch'](function () {});
   }
 
   function beacon(type, slot, extra) {
@@ -314,13 +351,18 @@ Zeekend.init = function init(config) {
     }, extra || {});
 
     if (cfg.transport) { return Promise.resolve(cfg.transport(assign({ event: true }, body))); }
-    if (typeof navigator !== 'undefined' && navigator.sendBeacon) {
-      try {
-        navigator.sendBeacon(cfg.endpoint + '/event', new Blob([JSON.stringify(body)],
-          { type: 'application/json' }));
-        return Promise.resolve();
-      } catch (e) { /* fall through */ }
-    }
+    /* Used to try navigator.sendBeacon() first, and then fetch(..., {keepalive:
+       true}) as the fallback. Both send cross-origin requests WITH credentials
+       in this engine, regardless of what the page asks for — and this server's
+       CORS header is a plain "*", which is illegal to pair with a credentialed
+       request, so the browser blocks the preflight outright. The result: every
+       impression/click silently failed to bill in the normal deployment
+       topology (publisher app and exchange on different origins), while
+       looking, from here, like nothing was wrong. A plain post() — no beacon,
+       no keepalive — never sends credentials, so it isn't affected. The
+       tradeoff is losing the "survives page unload" property sendBeacon/
+       keepalive had; acceptable here since an impression already requires 1s
+       of confirmed visibility, so the page was alive a moment ago regardless. */
     return post(cfg.endpoint + '/event', body, cfg.timeoutMs)['catch'](function () {});
   }
 
@@ -633,12 +675,12 @@ function trimContext(c) {
   return out;
 }
 
-function post(url, body, timeoutMs) {
+function post(url, body, timeoutMs, extraHeaders) {
   var ctl = typeof AbortController !== 'undefined' ? new AbortController() : null;
   var timer = ctl ? setTimeout(function () { ctl.abort(); }, timeoutMs) : null;
   return fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: assign({ 'Content-Type': 'application/json' }, extraHeaders || {}),
     body: JSON.stringify(body),
     signal: ctl ? ctl.signal : undefined
   }).then(function (r) {

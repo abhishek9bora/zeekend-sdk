@@ -1,10 +1,13 @@
 {
   "name": "@zeekend/sdk",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "Sponsored product placements for AI apps. Contextual, labeled, no user data.",
   "type": "module",
   "main": "./sdk/zeekend.js",
   "module": "./sdk/zeekend.js",
+  "bin": {
+    "zeekend": "./bin/init.cjs"
+  },
   "exports": {
     ".": "./sdk/zeekend.js",
     "./react": "./sdk/react.jsx",
@@ -12,8 +15,10 @@
   },
   "files": [
     "sdk",
+    "bin",
     "README.md",
     "SKILL.md",
+    "SKILL_DASHBOARD.md",
     "LICENSE"
   ],
   "sideEffects": false,

@@ -15,6 +15,20 @@ moment it helps.
 
 ## Quickstart
 
+The one-line way — installs the package AND finds your chat's message list
+and drops the component in for you, no copy/paste:
+
+```bash
+npx @zeekend/sdk init
+```
+
+Works when your chat UI renders messages as `{messages.map(...)}` (true for
+most React chat apps, including `useChat()` from the Vercel AI SDK). If it
+can't find that pattern with confidence, it says so and prints the manual
+snippet below instead of guessing.
+
+Or by hand:
+
 ```bash
 npm i @zeekend/sdk
 ```
@@ -26,6 +40,11 @@ import { ZeekendSlot } from '@zeekend/sdk/react'
 ```
 
 Drop it under your message list. That is the whole integration.
+
+Using an AI coding assistant instead? Paste this:
+`Read https://exchange.zeekend.com/skill.md and install Zeekend in this app.`
+(or `/skill-dashboard.md` for the version that also wires up
+[publisher.zeekend.com](https://publisher.zeekend.com) reporting.)
 
 `pub_test` is the sandbox key. No signup, no waiting. It fills on almost every
 turn so you can see it working in your own app in about two minutes, and it bills

@@ -149,3 +149,6 @@ earlier turn. Text is clipped client-side before the request leaves.
 - API base: https://exchange.zeekend.com/v1
 - Health: https://exchange.zeekend.com/v1/health
 - Request a publisher key: https://zeekend.com/#for-ai-platforms
+- Also want this app's activity to show up on a live dashboard? Use
+  https://exchange.zeekend.com/skill-dashboard.md instead of this file — same
+  integration, plus one extra key.
