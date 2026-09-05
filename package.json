@@ -6,7 +6,7 @@
   "main": "./sdk/zeekend.js",
   "module": "./sdk/zeekend.js",
   "bin": {
-    "zeekend": "./bin/init.cjs"
+    "zeekend": "bin/init.cjs"
   },
   "exports": {
     ".": "./sdk/zeekend.js",
