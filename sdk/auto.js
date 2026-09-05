@@ -37,7 +37,20 @@
     endpoint: script.getAttribute('data-endpoint') || 'https://exchange.zeekend.com/v1',
     mount: script.getAttribute('data-mount'),
     relevance: parseFloat(script.getAttribute('data-relevance')) || undefined,
-    debug: script.getAttribute('data-debug') === '1'
+    debug: script.getAttribute('data-debug') === '1',
+    /* Dashboard reporting, which this tag previously had no way to switch on
+       at all — so a script-tag publisher saw ads serve and bill normally
+       while their dashboard sat at zero impressions forever, with nothing
+       explaining why.
+
+       Defaults to data-key because a key minted through the publisher
+       dashboard is the same value on both sides. data-app-key stays available
+       for the case where they differ. If the key isn't one the dashboard
+       recognises (a sandbox key, or one issued straight from the exchange),
+       that call 401s and is swallowed — trackEvent is deliberately
+       fire-and-forget, and never affects what ad shows or what gets billed. */
+    zeekendAppKey: script.getAttribute('data-app-key') || script.getAttribute('data-key'),
+    trackingEndpoint: script.getAttribute('data-tracking-endpoint') || undefined
   };
 
   if (!cfg.publisherKey) {
@@ -145,12 +158,22 @@
     'import { Zeekend } from "' + sdkUrl + '";' +
     'window.__zkReady(Zeekend);';
   window.__zkReady = function (Zeekend) {
-    zk = Zeekend.client({
+    /* Only pass what was actually configured. The SDK merges with
+       Object.assign semantics, which copies undefined over a default rather
+       than falling back to it — so handing it `relevance: undefined` sets
+       relevance to undefined instead of leaving 0.55 in place. That is how
+       every script-tag publisher has been running with no relevance floor:
+       the auction reads Number(undefined) as NaN and falls back to 0. */
+    var clientCfg = {
       publisherKey: cfg.publisherKey,
       endpoint: cfg.endpoint,
-      relevance: cfg.relevance,
-      debug: cfg.debug
-    });
+      debug: cfg.debug,
+      zeekendAppKey: cfg.zeekendAppKey
+    };
+    if (cfg.relevance !== undefined) { clientCfg.relevance = cfg.relevance; }
+    if (cfg.trackingEndpoint) { clientCfg.trackingEndpoint = cfg.trackingEndpoint; }
+
+    zk = Zeekend.client(clientCfg);
     log('ready');
     tick();
   };
