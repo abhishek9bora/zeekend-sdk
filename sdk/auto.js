@@ -1,7 +1,7 @@
 /**
  * @zeekend/sdk — auto install
  *
- *   <script src="https://cdn.zeekend.com/z.js" data-key="pub_test"></script>
+ *   <script src="https://exchange.zeekend.com/z.js" data-key="pub_test"></script>
  *
  * That is the entire integration. No imports, no component, no messages array,
  * no knowledge of how the app is built. Paste one line into index.html.
