@@ -53,6 +53,20 @@ var DEFAULTS = {
   blockCategories: [],  // e.g. ['gambling','crypto','supplements','politics']
   blockAdvertisers: [], // e.g. ['competitor.com']
 
+  /* Which placement shapes your surface will render.
+     null means the exchange's own default, which is every bordered format:
+     a card, a catalogue, or a line of text beside the answer.
+
+     Add 'inline' only if you have decided your assistant may carry a
+     sponsored clause inside its own answer. It is not in the default and it
+     never arrives unasked, because that is a decision about your product's
+     voice rather than a layout you can restyle later.
+
+       accepts: ['card', 'catalog', 'inline']
+
+     The advertiser has to have chosen inline too. Both sides or neither. */
+  accepts: null,
+
   /* Hard ceiling on the auction. Generous on purpose: the request fires on the
      user's question and races your model's stream, so nothing is waiting on it.
      A late ad renders a beat after the answer; an aborted one renders never.
@@ -175,6 +189,9 @@ Zeekend.init = function init(config) {
       context: trimContext(context),
       dimensions: opts.dimensions || null,   // you give room, we pick the format
       relevance: opts.relevance != null ? opts.relevance : cfg.relevance,
+      // Omitted entirely when unset, so an older publisher's payload is
+      // byte-for-byte what it was and the exchange applies its own default.
+      accepts: opts.accepts || cfg.accepts || undefined,
       blockCategories: cfg.blockCategories,
       blockAdvertisers: cfg.blockAdvertisers,
       prefetch: prefetch,
