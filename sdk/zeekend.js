@@ -713,8 +713,14 @@ function post(url, body, timeoutMs, extraHeaders) {
 
 function cacheKey(p) {
   var c = p.context;
+  /* accepts is in here for the same reason relevance is: both can be
+     overridden per request, and a cached slot answers the request that
+     produced it, not a later one that would have asked for a different
+     shape. Without it, asking for a card and then for an inline placement
+     with the same question returns the card twice. */
   return [p.placementId, c.type, clip(c.question || c.text || c.title || '', 300),
-    c.answer ? 'a' : 'q', p.relevance].join('|');
+    c.answer ? 'a' : 'q', p.relevance,
+    (p.accepts || []).join(',')].join('|');
 }
 
 function assign(t) {
