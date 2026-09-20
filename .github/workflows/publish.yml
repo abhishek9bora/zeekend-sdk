@@ -2,9 +2,13 @@
 # this repository it was built from, attested by GitHub, so anyone installing
 # it can check that what npm serves is what this repo contains.
 #
+# No token. npm trusts this workflow directly (OIDC "trusted publishing"),
+# configured once on npmjs.com under the package's Settings > Trusted
+# publishing: GitHub Actions, owner abhishek9bora, repository zeekend-sdk,
+# workflow publish.yml. Provenance is generated automatically on that path.
+#
 # Triggered by publishing a GitHub release whose tag is v<version>, where
-# <version> matches package.json. Needs one secret: NPM_TOKEN, a granular
-# access token for @zeekend/sdk with "bypass 2FA" allowed for automation.
+# <version> matches package.json.
 name: publish
 on:
   release:
@@ -19,13 +23,14 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           registry-url: https://registry.npmjs.org
+      # Trusted publishing needs npm 11.5.1 or later; the npm bundled with
+      # Node 22 is older.
+      - run: npm install -g npm@latest
       - run: npm test
       - name: Tag must match package.json
         run: |
           v=$(node -p "require('./package.json').version")
           [ "${GITHUB_REF_NAME}" = "v$v" ] || { echo "tag ${GITHUB_REF_NAME} != v$v"; exit 1; }
-      - run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - run: npm publish --access public
