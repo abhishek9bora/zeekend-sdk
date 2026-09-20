@@ -7,6 +7,13 @@
 # publishing: GitHub Actions, owner abhishek9bora, repository zeekend-sdk,
 # workflow publish.yml. Provenance is generated automatically on that path.
 #
+# This workflow STAGES the version; it does not go live on its own. A
+# maintainer approves it with 2FA, on npmjs.com under the package's Staged
+# Packages tab or with `npm stage approve <stage-id>`. That is deliberate:
+# this code runs inside publishers' apps, and nobody who merely gains push
+# access to this repository should be able to change what every publisher
+# serves without a person saying yes.
+#
 # Triggered by publishing a GitHub release whose tag is v<version>, where
 # <version> matches package.json.
 name: publish
@@ -25,12 +32,12 @@ jobs:
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
-      # Trusted publishing needs npm 11.5.1 or later; the npm bundled with
-      # Node 22 is older.
+      # Staged publishing needs npm 11.15 or later and Node 22.14 or later;
+      # the npm bundled with Node is older.
       - run: npm install -g npm@latest
       - run: npm test
       - name: Tag must match package.json
         run: |
           v=$(node -p "require('./package.json').version")
           [ "${GITHUB_REF_NAME}" = "v$v" ] || { echo "tag ${GITHUB_REF_NAME} != v$v"; exit 1; }
-      - run: npm publish --access public
+      - run: npm stage publish

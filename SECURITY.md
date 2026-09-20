@@ -15,5 +15,6 @@ subject. We reply within two business days, and we will not take action
 against good-faith research.
 
 **Verifying a release:** every version from 0.5.1 on is published from this
-repository by GitHub Actions through npm trusted publishing, with provenance. The npm page shows the exact
+repository by GitHub Actions through npm trusted publishing, with provenance,
+and staged: a maintainer approves each version with 2FA before it goes live. The npm page shows the exact
 commit a version was built from; `npm audit signatures` checks it locally.
