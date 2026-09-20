@@ -1,0 +1,31 @@
+# Publishes to npm with provenance: the package page shows which commit in
+# this repository it was built from, attested by GitHub, so anyone installing
+# it can check that what npm serves is what this repo contains.
+#
+# Triggered by publishing a GitHub release whose tag is v<version>, where
+# <version> matches package.json. Needs one secret: NPM_TOKEN, a granular
+# access token for @zeekend/sdk with "bypass 2FA" allowed for automation.
+name: publish
+on:
+  release:
+    types: [published]
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+      - run: npm test
+      - name: Tag must match package.json
+        run: |
+          v=$(node -p "require('./package.json').version")
+          [ "${GITHUB_REF_NAME}" = "v$v" ] || { echo "tag ${GITHUB_REF_NAME} != v$v"; exit 1; }
+      - run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

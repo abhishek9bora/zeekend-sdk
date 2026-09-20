@@ -197,6 +197,14 @@ zk.attach({ mount: messageEl, messages })   // call whenever messages change
 
 Repeat calls within a turn are ignored, so wire it into your render loop.
 
+## Source and releases
+
+This repository is the SDK's source. Releases are published to npm from here by
+GitHub Actions with [provenance](https://docs.npmjs.com/generating-provenance-statements),
+so the npm page shows the commit each version was built from. The exchange the
+SDK talks to is a separate, private service; everything the SDK sends it is
+listed under [What we receive](#what-we-receive), and in `SECURITY.md`.
+
 ## Protocol
 
 If you would rather not use the SDK at all:
