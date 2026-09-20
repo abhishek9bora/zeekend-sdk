@@ -18,7 +18,10 @@ execFileSync(process.execPath, ['--check', new URL('../bin/init.cjs', import.met
 const expected = ['LICENSE', 'README.md', 'SKILL.md', 'SKILL_DASHBOARD.md',
   'bin/init.cjs', 'package.json', 'sdk/auto.js', 'sdk/react.jsx', 'sdk/zeekend.js'];
 const out = execFileSync('npm', ['pack', '--dry-run', '--json'], { encoding: 'utf8' });
-const files = JSON.parse(out)[0].files.map(f => f.path).sort();
+// npm 10 prints an array of packages; npm 11 prints an object keyed by name.
+const parsed = JSON.parse(out);
+const pkg = Array.isArray(parsed) ? parsed[0] : Object.values(parsed)[0];
+const files = pkg.files.map(f => f.path).sort();
 const missing = expected.filter(f => !files.includes(f));
 const extra = files.filter(f => !expected.includes(f));
 if (missing.length || extra.length) {
