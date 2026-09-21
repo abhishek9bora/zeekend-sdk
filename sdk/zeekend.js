@@ -743,9 +743,14 @@ function safeLocale() {
 function el(tag) { return document.createElement(tag); }
 function text(tag, str, css) { var n = el(tag); n.textContent = str; n.style.cssText = css; return n; }
 
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { Zeekend: Zeekend, deriveContext: deriveContext };
-}
+/* ESM only. This file used to also assign module.exports for CommonJS
+   consumers, and that line cost more than it gave: webpack treats any file
+   that touches module.exports as CommonJS and disables its ESM exports, so
+   under a webpack-built Next.js app `import { Zeekend }` resolved to an
+   empty namespace and the React component crashed on render. Turbopack
+   tolerated the mix, which is why it went unnoticed. The package declares
+   "type": "module"; a CommonJS consumer uses import(). The window global
+   stays: auto.js loads this file as a module script and reads it. */
 if (typeof window !== 'undefined') { window.Zeekend = Zeekend; }
 export { Zeekend, deriveContext };
 export default Zeekend;
