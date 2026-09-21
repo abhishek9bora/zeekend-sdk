@@ -3,6 +3,7 @@
 // Runs before every pack and publish (see package.json "prepack"), so a
 // broken build cannot reach npm.
 import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
 
 const zk = await import('../sdk/zeekend.js');
 if (typeof zk.Zeekend?.init !== 'function') throw new Error('sdk/zeekend.js: Zeekend.init missing');
@@ -15,8 +16,18 @@ execFileSync(process.execPath, ['--check', new URL('../sdk/auto.js', import.meta
 // The CLI runs on load and waits for a terminal, so it is parsed, not required.
 execFileSync(process.execPath, ['--check', new URL('../bin/init.cjs', import.meta.url).pathname]);
 
+// The compiled React entry must match its source. A stale build here would
+// ship a component that does not do what the .jsx in the repo says it does.
+const { compileReact } = await import('./build.js');
+const committed = fs.readFileSync(new URL('../sdk/react.js', import.meta.url).pathname, 'utf8');
+if (committed !== compileReact()) throw new Error('sdk/react.js is stale: run `npm run build` and commit it');
+
+// React entry: the compiled file must load and export the hook and component.
+// (It imports react, which is a peer, so it is checked by parsing only.)
+execFileSync(process.execPath, ['--check', new URL('../sdk/react.js', import.meta.url).pathname]);
+
 const expected = ['LICENSE', 'README.md', 'SKILL.md', 'SKILL_DASHBOARD.md',
-  'bin/init.cjs', 'package.json', 'sdk/auto.js', 'sdk/react.jsx', 'sdk/zeekend.js'];
+  'bin/init.cjs', 'package.json', 'sdk/auto.js', 'sdk/react.js', 'sdk/react.jsx', 'sdk/zeekend.js'];
 const out = execFileSync('npm', ['pack', '--dry-run', '--json'], { encoding: 'utf8' });
 // npm 10 prints an array of packages; npm 11 prints an object keyed by name.
 const parsed = JSON.parse(out);
