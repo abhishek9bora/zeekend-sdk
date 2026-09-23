@@ -26,6 +26,22 @@ if (committed !== compileReact()) throw new Error('sdk/react.js is stale: run `n
 // (It imports react, which is a peer, so it is checked by parsing only.)
 execFileSync(process.execPath, ['--check', new URL('../sdk/react.js', import.meta.url).pathname]);
 
+// The version the SDK reports must be the version that was published. It
+// drifted from 0.2.0 to 0.5.2 unnoticed, which made the version every
+// publisher reports to the exchange meaningless.
+const manifest = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url).pathname, 'utf8'));
+const core = fs.readFileSync(new URL('../sdk/zeekend.js', import.meta.url).pathname, 'utf8');
+const declared = (core.match(/^var VERSION = '([^']*)';/m) || [])[1];
+if (declared !== manifest.version) {
+  throw new Error(`sdk/zeekend.js says VERSION '${declared}' but package.json says '${manifest.version}'`);
+}
+
+// The README promises zero dependencies, and the package once depended on
+// itself. Keep the promise checkable rather than remembered.
+if (manifest.dependencies && Object.keys(manifest.dependencies).length) {
+  throw new Error('package.json declares runtime dependencies: ' + Object.keys(manifest.dependencies).join(', '));
+}
+
 const expected = ['LICENSE', 'README.md', 'SKILL.md', 'SKILL_DASHBOARD.md',
   'bin/init.cjs', 'package.json', 'sdk/auto.js', 'sdk/react.js', 'sdk/react.jsx', 'sdk/zeekend.js'];
 const out = execFileSync('npm', ['pack', '--dry-run', '--json'], { encoding: 'utf8' });
