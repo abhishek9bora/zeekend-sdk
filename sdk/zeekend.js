@@ -22,7 +22,7 @@
  *     remove the label that says it is sponsored.
  */
 
-var VERSION = '0.5.3';   // must equal package.json; scripts/check.js enforces it
+var VERSION = '0.5.4';   // must equal package.json; scripts/check.js enforces it
 
 var DEFAULTS = {
   endpoint: 'https://exchange.zeekend.com/v1',
@@ -391,15 +391,30 @@ Zeekend.init = function init(config) {
   function render(slot, mount, opts) {
     opts = opts || {};
     if (typeof document === 'undefined') { return null; }
+    /* Text colour is decided here, not inherited.
+
+       It used to default to 'inherit', and the wrapper set no colour at all,
+       so every word in the unit took whatever colour the host page happened
+       to apply at that point in its DOM. On a publisher whose container
+       resolved to near-white text, the ad rendered as an empty bordered box:
+       borders and the two elements with explicit colours were visible, and
+       the headline, body, product titles and prices were not. It served,
+       billed, and showed nothing readable, with no error anywhere.
+
+       An ad injected into somebody else's page cannot depend on what that
+       page inherits. So: read the effective background behind the mount
+       point, and pick text that contrasts with it. */
+    var picked = readableColors(mount);
     var t = assign({
-      accent: '#c2410c', text: 'inherit', muted: '#6b7280',
-      border: 'rgba(120,120,120,.28)', radius: '10px'
+      accent: '#c2410c', text: picked.text, muted: picked.muted,
+      border: picked.border, radius: '10px'
     }, opts.theme || {});
 
     var wrap = el('div');
     wrap.setAttribute('data-zeekend-slot', slot.slotId);
     wrap.style.cssText = 'margin-top:12px;border:1px solid ' + t.border + ';border-radius:' +
-      t.radius + ';padding:10px 12px;font:inherit;line-height:1.45;position:relative;';
+      t.radius + ';padding:10px 12px;font:inherit;line-height:1.45;position:relative;' +
+      'color:' + t.text + ';';
 
     // Disclosure. Not optional, not restylable away.
     var lbl = el('div');
@@ -740,6 +755,32 @@ function nowMs() {
 function safeLocale() {
   try { return Intl.DateTimeFormat().resolvedOptions().locale || null; } catch (e) { return null; }
 }
+/* The first background colour an ancestor actually paints, and text that
+   contrasts with it. Returns dark-on-light when nothing can be determined,
+   because an unstyled page is white far more often than black. */
+function readableColors(mount) {
+  var LIGHT = { text: '#111827', muted: '#6b7280', border: 'rgba(120,120,120,.28)' };
+  var DARK = { text: '#f3f4f6', muted: '#9ca3af', border: 'rgba(180,180,180,.30)' };
+  try {
+    var node = mount || document.body;
+    while (node && node.nodeType === 1) {
+      var bg = getComputedStyle(node).backgroundColor;
+      var m = bg && bg.match(/rgba?\(([^)]+)\)/);
+      if (m) {
+        var p = m[1].split(',').map(parseFloat);
+        var alpha = p.length > 3 ? p[3] : 1;
+        if (alpha > 0.1) {
+          // Rec. 601 luma is plenty for a light/dark decision.
+          var luma = (0.299 * p[0] + 0.587 * p[1] + 0.114 * p[2]) / 255;
+          return luma < 0.5 ? DARK : LIGHT;
+        }
+      }
+      node = node.parentElement;
+    }
+  } catch (e) { /* no DOM, or a hostile getComputedStyle. Fall through. */ }
+  return LIGHT;
+}
+
 function el(tag) { return document.createElement(tag); }
 function text(tag, str, css) { var n = el(tag); n.textContent = str; n.style.cssText = css; return n; }
 
