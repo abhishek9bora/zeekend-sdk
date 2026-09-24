@@ -86,6 +86,39 @@ Only `publisherKey` and `messages` are required.
 only. At 0.35 you roughly double fill and placements feel looser. Move it on your
 own numbers, not ours.
 
+### Sponsored lines
+
+A placement arrives as a card, a catalogue, or a **sponsored line**: a short
+labelled sentence after the answer, naming one product. The advertiser chooses
+which, per campaign. `serve()` renders all of them.
+
+A sponsored line has three parts, and who owns which one is the point:
+
+| | |
+| --- | --- |
+| the lead-in | **your words**, in your assistant's voice |
+| the claim | the advertiser's words, all of them inside the link |
+| the label | "Sponsored", after the claim rather than before it |
+
+The lead-in defaults to *"You might also want to look at"*. It is the one
+string here worth writing yourself, because it is the only part in your voice
+— and an advertiser buying the words that introduce their own ad is exactly
+what the split exists to prevent.
+
+```jsx
+zk.serve({ mount, messages, inlineLeadIn: 'Worth a look:' })
+```
+
+```html
+<script src="https://exchange.zeekend.com/z.js"
+        data-key="pub_live_..."
+        data-lead-in="Worth a look:"></script>
+```
+
+Rendering slots yourself? A sponsored line arrives as `slot.format === 'inline'`
+with the sentence in `slot.inline`. `headline` and `body` still ride along, so
+you can render a card instead without a second request.
+
 Rendering several slots, or want config in one place:
 
 ```jsx

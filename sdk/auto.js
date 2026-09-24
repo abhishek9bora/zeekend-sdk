@@ -25,6 +25,9 @@
  *   data-relevance quality floor, 0-1
  *   data-endpoint  a self-hosted exchange
  *   data-debug     "1" for verbose logging
+ *   data-lead-in   your words introducing a sponsored line, e.g.
+ *                  "You might also want to look at". Yours, not the
+ *                  advertiser's — it is the only part in your voice.
  */
 
 (function () {
@@ -38,6 +41,7 @@
     mount: script.getAttribute('data-mount'),
     relevance: parseFloat(script.getAttribute('data-relevance')) || undefined,
     debug: script.getAttribute('data-debug') === '1',
+    inlineLeadIn: script.getAttribute('data-lead-in') || undefined,
     /* Dashboard reporting, which this tag previously had no way to switch on
        at all — so a script-tag publisher saw ads serve and bill normally
        while their dashboard sat at zero impressions forever, with nothing
