@@ -22,7 +22,7 @@
  *     remove the label that says it is sponsored.
  */
 
-var VERSION = '0.6.0';   // must equal package.json; scripts/check.js enforces it
+var VERSION = '0.7.0';   // must equal package.json; scripts/check.js enforces it
 
 var DEFAULTS = {
   endpoint: 'https://exchange.zeekend.com/v1',
@@ -67,18 +67,16 @@ var DEFAULTS = {
   blockCategories: [],  // e.g. ['gambling','crypto','supplements','politics']
   blockAdvertisers: [], // e.g. ['competitor.com']
 
-  /* Which placement shapes your surface will render.
-     null means the exchange's own default, which is every bordered format:
-     a card, a catalogue, or a line of text beside the answer.
+  /* Deprecated, and ignored by the exchange since the format negotiation
+     was removed. It used to list which shapes your surface would render, and
+     a placement served only when the advertiser's campaign named the same
+     one. In practice that default silently declined inline for everyone who
+     followed the install doc, and an advertiser who picked inline got no
+     fill at all rather than a card.
 
-     Add 'inline' only if you have decided your assistant may carry a
-     sponsored clause inside its own answer. It is not in the default and it
-     never arrives unasked, because that is a decision about your product's
-     voice rather than a layout you can restyle later.
-
-       accepts: ['card', 'catalog', 'inline']
-
-     The advertiser has to have chosen inline too. Both sides or neither. */
+     The advertiser now picks the shape and serve() renders whatever arrives,
+     inline included. Still accepted so an older integration does not break;
+     it simply has no effect. */
   accepts: null,
 
   /* Hard ceiling on the auction. Generous on purpose: the request fires on the
@@ -422,9 +420,23 @@ Zeekend.init = function init(config) {
        point, and pick text that contrasts with it. */
     var picked = readableColors(mount);
     var t = assign({
-      accent: '#c2410c', text: picked.text, muted: picked.muted,
+      accent: picked.accent, text: picked.text, muted: picked.muted,
       border: picked.border, radius: '10px'
     }, opts.theme || {});
+
+    /* Inline is not a bordered unit, so it leaves before the box is built.
+       Everything below assumes a card: a border, a padded box, a disclosure
+       stacked above the content and a Report button floated into the corner.
+       An inline placement is a sentence in the run of the page and gets none
+       of that.
+
+       Only a slot that both says inline AND carries the sentence takes this
+       path. Without copy there is nothing to render, and the exchange sends
+       headline and body on an inline slot precisely so this falls through to
+       the card below rather than drawing an empty line. */
+    if (slot.format === 'inline' && typeof slot.inline === 'string' && slot.inline.trim()) {
+      return renderInline(slot, mount, opts, t);
+    }
 
     var wrap = el('div');
     wrap.setAttribute('data-zeekend-slot', slot.slotId);
@@ -466,6 +478,80 @@ Zeekend.init = function init(config) {
     (mount || document.body).appendChild(wrap);
     observe(wrap, function () { impression(slot); });
     return wrap;
+  }
+
+  /* A sponsored line, rendered as three parts with different owners:
+
+       the lead-in    your words. The hand-off is in the assistant's voice
+                      because it is the assistant speaking, so it comes from
+                      your config and never from the slot. An advertiser
+                      buying the words that introduce their own ad is exactly
+                      what this separation exists to stop.
+       the claim      the advertiser's words, every one of them inside the
+                      link and nowhere else.
+       the label      after the claim rather than before it, so it reads as a
+                      note on what was just said.
+
+     A reader who wonders which half was paid for can see it: the paid half
+     is the underlined half.
+
+     Set `inlineLeadIn` to your own phrasing. It is the one string here worth
+     writing yourself, because it is the only part in your voice. */
+  function renderInline(slot, mount, opts, t) {
+    var p = el('p');
+    p.setAttribute('data-zeekend-slot', slot.slotId);
+    /* Named, so a screen reader reaches the label rather than meeting the
+       claim first and the disclosure a sentence later. */
+    p.setAttribute('role', 'note');
+    p.setAttribute('aria-label', 'Sponsored suggestion');
+    p.style.cssText = 'margin:12px 0 0;font:inherit;line-height:1.55;color:' + t.text + ';';
+
+    var lead = (opts.inlineLeadIn || 'You might also want to look at').trim();
+    if (lead) { p.appendChild(document.createTextNode(lead + ' ')); }
+
+    var a = el('a');
+    a.href = slot.clickUrl || slot.url;
+    a.target = '_blank';
+    a.rel = 'sponsored noopener noreferrer';   // never let an ad pass link equity
+    a.textContent = slot.inline.trim();
+    a.style.cssText = 'color:' + t.accent + ';text-decoration:underline;' +
+      'text-underline-offset:.18em;';
+    a.onclick = function () { click(slot); };
+    p.appendChild(a);
+
+    /* The advertiser wrote a clause, not a sentence, so the full stop is
+       ours. Skipped when they already ended one, which would otherwise read
+       as a typo on the publisher's page. */
+    p.appendChild(document.createTextNode(/[.!?]$/.test(slot.inline.trim()) ? ' ' : '. '));
+
+    /* Disclosure and Report travel together and never split across a line
+       break. Left loose, Report wraps onto its own line and reads as a stray
+       word under the answer rather than as part of the label. */
+    var tail = el('span');
+    tail.style.cssText = 'white-space:nowrap;';
+
+    // Disclosure. Not optional, not restylable away.
+    var lbl = el('span');
+    lbl.textContent = slot.disclosure || 'Sponsored';
+    lbl.style.cssText = 'font-size:.72em;letter-spacing:.08em;' +
+      'text-transform:uppercase;opacity:.6;color:' + t.muted + ';';
+    tail.appendChild(lbl);
+
+    /* Report, as the card has it. A floated button would be wrong on a line
+       of running text, so it sits after the label at the same weight. */
+    var rep = el('button');
+    rep.textContent = 'Report';
+    rep.setAttribute('aria-label', 'Report this ad');
+    rep.style.cssText = 'margin-left:.5em;background:none;border:0;padding:0;font:inherit;' +
+      'font-size:.72em;letter-spacing:.08em;text-transform:uppercase;opacity:.4;' +
+      'cursor:pointer;color:' + t.muted + ';';
+    rep.onclick = function () { report(slot, 'user'); rep.textContent = 'Reported'; rep.disabled = true; };
+    tail.appendChild(rep);
+    p.appendChild(tail);
+
+    (mount || document.body).appendChild(p);
+    observe(p, function () { impression(slot); });
+    return p;
   }
 
   function card(slot, t) {
@@ -775,8 +861,13 @@ function safeLocale() {
    contrasts with it. Returns dark-on-light when nothing can be determined,
    because an unstyled page is white far more often than black. */
 function readableColors(mount) {
-  var LIGHT = { text: '#111827', muted: '#6b7280', border: 'rgba(120,120,120,.28)' };
-  var DARK = { text: '#f3f4f6', muted: '#9ca3af', border: 'rgba(180,180,180,.30)' };
+  /* accent carries the link and the CTA, so it is picked here too rather
+     than left at one hardcoded orange. #c2410c is readable on white and
+     close to unreadable on near-black, which matters more for inline than
+     it ever did for a card: there the accent is a small button, here it is
+     the entire advertiser claim. */
+  var LIGHT = { text: '#111827', muted: '#6b7280', border: 'rgba(120,120,120,.28)', accent: '#c2410c' };
+  var DARK = { text: '#f3f4f6', muted: '#9ca3af', border: 'rgba(180,180,180,.30)', accent: '#fb923c' };
   try {
     var node = mount || document.body;
     while (node && node.nodeType === 1) {
