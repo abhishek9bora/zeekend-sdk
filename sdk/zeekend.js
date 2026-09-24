@@ -22,7 +22,7 @@
  *     remove the label that says it is sponsored.
  */
 
-var VERSION = '0.5.4';   // must equal package.json; scripts/check.js enforces it
+var VERSION = '0.6.0';   // must equal package.json; scripts/check.js enforces it
 
 var DEFAULTS = {
   endpoint: 'https://exchange.zeekend.com/v1',
@@ -43,10 +43,24 @@ var DEFAULTS = {
   // this file. Start at 0.55 and move it based on your own numbers.
   relevance: 0.55,
 
-  // Pacing. A conversational app that shows an ad on turn one has already lost.
+  /* Pacing. A conversational app that shows an ad on turn one has already
+     lost, so minTurns still runs here: it costs nothing to skip the opening
+     turns locally and there is no reason to ask the network about them.
+
+     turnGap and maxPerSession are null by default and decided by the
+     exchange, which already receives the session and turn on every request
+     and refuses a capped one before any scoring happens. They used to be
+     enforced here, at 2 and 3, and that made pacing a property of whichever
+     build a publisher happened to install: it could not be tuned from their
+     dashboard, and a skipped turn was invisible to the exchange, which could
+     not tell an app pacing itself from an app with no traffic.
+
+     Set either to a number to pace locally again. A local value is a
+     ceiling, not an override: the exchange applies its own on top, so
+     whichever is stricter wins. */
   minTurns: 2,          // no placement before the conversation warms up
-  turnGap: 2,           // user turns that must pass between two placements
-  maxPerSession: 3,
+  turnGap: null,        // user turns between placements; null = the exchange decides
+  maxPerSession: null,  // placements per session; null = the exchange decides
 
   // Brand safety, enforced server-side. Send whatever you would refuse to
   // have appear inside your product.
@@ -176,8 +190,10 @@ Zeekend.init = function init(config) {
     if (!prefetch) {
       if (!opts._secondPass) { state.turns += 1; }
       if (state.turns < cfg.minTurns) { return Promise.resolve(skip('warmup')); }
-      if (state.turns - state.lastFilledTurn < cfg.turnGap) { return Promise.resolve(skip('frequency_cap')); }
-      if (state.shown >= cfg.maxPerSession) { return Promise.resolve(skip('session_cap')); }
+      if (cfg.turnGap != null &&
+          state.turns - state.lastFilledTurn < cfg.turnGap) { return Promise.resolve(skip('frequency_cap')); }
+      if (cfg.maxPerSession != null &&
+          state.shown >= cfg.maxPerSession) { return Promise.resolve(skip('session_cap')); }
     }
 
     var payload = {

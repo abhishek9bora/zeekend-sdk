@@ -1,6 +1,6 @@
 {
   "name": "@zeekend/sdk",
-  "version": "0.5.4",
+  "version": "0.6.0",
   "description": "Sponsored product placements for AI apps. Contextual, labeled, no user data.",
   "type": "module",
   "main": "./sdk/zeekend.js",
