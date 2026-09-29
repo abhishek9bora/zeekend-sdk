@@ -8,8 +8,10 @@ moment it helps.
   while your model streams. The slot is decided before your answer finishes.
 - **Nothing fills most of the time.** Roughly 5 to 10% of turns. That is the
   design, not a bug.
-- **No user data.** We get the last question, optionally the answer, and your
-  publisher key. No identity, no cookies, no cross-app profile.
+- **No identifiers, no profiles.** No cookies, no device or advertising ids,
+  nothing stored on the device, no profile built across apps. Conversation
+  text does reach us — the last question, optionally the answer — because
+  that is what the matching runs on. See [What we receive](#what-we-receive).
 
 ---
 
@@ -21,6 +23,16 @@ and drops the component in for you, no copy/paste:
 ```bash
 npx @zeekend/sdk init
 ```
+
+It edits your source, so here is exactly what it touches before you run it. Two
+writes, both in `bin/init.cjs` and both worth reading first: it inserts the
+component into the one file that renders your message list, and appends your
+keys to `.env`. Nothing else, and no network call beyond the install.
+
+It does not show you the edit before making it. Run it on a clean git tree so
+`git diff` tells you everything it did — or skip it entirely and use the manual
+snippet below, which produces the same result. Preferring not to let a script
+edit your code is a reasonable position and costs you nothing here.
 
 Works when your chat UI renders messages as `{messages.map(...)}` (true for
 most React chat apps, including `useChat()` from the Vercel AI SDK). If it
@@ -172,7 +184,19 @@ Impressions, clicks, and what you have earned. No dashboard, no emailing us.
 
 Text is clipped in your app before the request leaves: 2,000 characters of
 question, 4,000 of answer. Read `trimContext()` in the source rather than taking
-our word for it.
+our word for it — and note what it does, which is truncate. It does not scan the
+message for names or emails and remove them. If a user types their own details
+into a conversation, that text is inside the message and reaches us with it.
+
+**Where it goes after us.** Deciding how well a product fits a conversation is
+done by a language model, so the question and answer are processed by Anthropic
+as our sub-processor. Conversation text leaves our infrastructure for that step.
+We would rather say so here than leave you to find it.
+
+**`conversationId` is optional and yours.** It ties follow-up turns together and
+we never join it to anything, but we also cannot tell whether the value you pass
+is a random thread id or something that identifies a person in your own systems.
+If in doubt, leave it out — nothing depends on it.
 
 ## Ad safety
 
@@ -186,6 +210,13 @@ do not let a model invent facts about someone's product.
 The exchange scores every candidate at zero when a conversation involves health,
 safety, injury, or money trouble. If your users are having a bad day, you earn
 nothing on that turn.
+
+Be clear about what that is and is not. It is a rule about **monetisation**,
+applied at the exchange, and it runs after the text has arrived. It is not a
+guarantee that such a message never leaves your app — it does, and it reaches
+our model provider as part of the matching. If your users discuss anything you
+would not send to a third party, that is a reason not to install this, and we
+would rather you decided that now than discover it later.
 
 ## Billing
 
