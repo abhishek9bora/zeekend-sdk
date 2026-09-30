@@ -510,7 +510,10 @@ Zeekend.init = function init(config) {
     if (lead) { p.appendChild(document.createTextNode(lead + ' ')); }
 
     var a = el('a');
-    a.href = slot.clickUrl || slot.url;
+    var inlineHref = safeUrl(slot.clickUrl || slot.url);
+    /* No usable link means no link. The sentence still renders, unlinked and
+       still labelled, rather than becoming an anchor that goes nowhere. */
+    if (inlineHref) { a.href = inlineHref; }
     a.target = '_blank';
     a.rel = 'sponsored noopener noreferrer';   // never let an ad pass link equity
     a.textContent = slot.inline.trim();
@@ -558,9 +561,10 @@ Zeekend.init = function init(config) {
     var box = el('div');
     box.style.cssText = 'display:flex;gap:10px;align-items:flex-start;';
 
-    if (slot.image) {
+    var cardImg = safeUrl(slot.image);
+    if (cardImg) {
       var img = el('img');
-      img.src = slot.image; img.alt = '';
+      img.src = cardImg; img.alt = '';
       img.style.cssText = 'width:56px;height:56px;object-fit:cover;border-radius:6px;flex:0 0 auto;';
       img.onerror = function () { img.style.display = 'none'; };
       box.appendChild(img);
@@ -589,14 +593,19 @@ Zeekend.init = function init(config) {
       '-webkit-overflow-scrolling:touch;scrollbar-width:thin;';
     slot.items.slice(0, 8).forEach(function (item) {
       var c = el('a');
-      c.href = item.clickUrl || slot.clickUrl;
+      var itemHref = safeUrl(item.clickUrl || slot.clickUrl);
+      /* Resolved before the style, which asks whether there is an image: a
+         tile without one is given a border instead. Declaring it after would
+         hoist as undefined and every tile would get the border. */
+      var itemImg = safeUrl(item.image);
+      if (itemHref) { c.href = itemHref; }
       c.target = '_blank'; c.rel = 'sponsored noopener noreferrer';
       c.style.cssText = 'flex:0 0 132px;text-decoration:none;color:inherit;display:block;' +
-        (item.image ? '' : 'border:1px solid ' + t.border + ';border-radius:8px;padding:9px 10px;');
+        (itemImg ? '' : 'border:1px solid ' + t.border + ';border-radius:8px;padding:9px 10px;');
       c.onclick = function () { click(slot); };
-      if (item.image) {
+      if (itemImg) {
         var img = el('img');
-        img.src = item.image; img.alt = '';
+        img.src = itemImg; img.alt = '';
         img.style.cssText = 'width:132px;height:132px;object-fit:cover;border-radius:6px;display:block;';
         img.onerror = function () { img.style.display = 'none'; };
         c.appendChild(img);
@@ -610,7 +619,8 @@ Zeekend.init = function init(config) {
 
   function cta(slot, t) {
     var a = el('a');
-    a.href = slot.clickUrl || slot.url;
+    var href = safeUrl(slot.clickUrl || slot.url);
+    if (href) { a.href = href; }
     a.target = '_blank';
     a.rel = 'sponsored noopener noreferrer';   // never let an ad pass link equity
     a.textContent = slot.cta || 'View';
@@ -886,6 +896,32 @@ function readableColors(mount) {
     }
   } catch (e) { /* no DOM, or a hostile getComputedStyle. Fall through. */ }
   return LIGHT;
+}
+
+/* A URL is safe to put in href or src only if we recognise its scheme.
+ *
+ * Everything rendered here arrives over the network. Today a link is always
+ * the exchange's own click URL, so nothing advertiser-controlled reaches an
+ * href — but that is an implementation detail holding the line, not a check,
+ * and `slot.image` has no such indirection: it is the advertiser's string,
+ * used verbatim. An image pointing anywhere the advertiser likes turns every
+ * viewer into a request to a host the publisher never agreed to.
+ *
+ * https only. Not http, because a mixed-content image on an https page is
+ * blocked anyway and an http link leaks the referrer in clear. Not data:,
+ * not blob:, and certainly not javascript:.
+ *
+ * Returns null for anything else, and callers skip the element entirely
+ * rather than rendering a broken one. */
+function safeUrl(u) {
+  if (typeof u !== 'string' || !u) { return null; }
+  var s = u.trim();
+  // A leading control character or whitespace can hide a scheme from a naive
+  // check while the browser still reads it, so parse rather than pattern-match.
+  try {
+    var parsed = new URL(s, typeof location !== 'undefined' ? location.href : 'https://x.invalid');
+    return parsed.protocol === 'https:' ? parsed.href : null;
+  } catch (e) { return null; }
 }
 
 function el(tag) { return document.createElement(tag); }
