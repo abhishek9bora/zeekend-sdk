@@ -22,7 +22,7 @@
  *     remove the label that says it is sponsored.
  */
 
-var VERSION = '0.7.0';   // must equal package.json; scripts/check.js enforces it
+var VERSION = '0.7.1';   // must equal package.json; scripts/check.js enforces it
 
 var DEFAULTS = {
   endpoint: 'https://exchange.zeekend.com/v1',

@@ -42,7 +42,10 @@ if (manifest.dependencies && Object.keys(manifest.dependencies).length) {
   throw new Error('package.json declares runtime dependencies: ' + Object.keys(manifest.dependencies).join(', '));
 }
 
-const expected = ['LICENSE', 'README.md', 'SKILL.md', 'SKILL_DASHBOARD.md',
+/* Every file that ships. Listed rather than counted, so an addition has to be
+   a decision someone made here — which is what caught CHANGELOG.md arriving
+   in 0.7.1 and made including it deliberate rather than incidental. */
+const expected = ['CHANGELOG.md', 'LICENSE', 'README.md', 'SKILL.md', 'SKILL_DASHBOARD.md',
   'bin/init.cjs', 'package.json', 'sdk/auto.js', 'sdk/react.js', 'sdk/react.jsx', 'sdk/zeekend.js'];
 const out = execFileSync('npm', ['pack', '--dry-run', '--json'], { encoding: 'utf8' });
 // npm 10 prints an array of packages; npm 11 prints an object keyed by name.
