@@ -72,7 +72,11 @@ That is the entire integration. Nothing else is required.
 - Do not fire an impression on render. The SDK fires it on visibility.
 - Do not place the unit above the assistant's answer.
 - Do not add more than one slot per turn unless asked.
-- Do not lower `minTurns` below 2.
+- Do not set `minTurns`, `turnGap` or `maxPerSession` in code. Pacing is
+  the publisher's to set from their dashboard; a value in code overrides it
+  and cannot be changed without a redeploy.
+- Do not set `includePrevious: true` unless the user asks for it. It sends an
+  earlier turn, which their privacy notice has to cover.
 
 ## Step 6 — Verify before reporting success
 
@@ -82,8 +86,10 @@ That is the entire integration. Nothing else is required.
 4. Confirm **exactly one request per turn**, not one per token. A burst means
    `messages` is being rebuilt with different content each render. Investigate
    before continuing.
-5. Turn one will `skip warmup`. Correct: `minTurns` defaults to 2.
-6. On `pub_test`, turn two onward should fill every time. If nothing ever fills,
+5. On a live key, turn one will normally `skip warmup`: the exchange holds
+   the first placement to turn 2 unless the dashboard says otherwise. Correct.
+   `pub_test` is not paced, so it fills from turn one.
+6. On `pub_test`, every turn should fill. If nothing ever fills,
    the integration is wrong, not the matching. On a live key, most turns
    correctly return nothing.
 7. Confirm `errorRate` is 0 via `useZeekend().stats()`.
@@ -99,7 +105,7 @@ Only report the integration complete after steps 4 and 6 pass.
 | `errorRate` above 0 | Connection or auth. The console warning names the fix. |
 | `errorRate` 0, `fillRate` 0 on a live key | Working correctly. Nothing matched. |
 | A request per token | `messages` content is changing every render. |
-| Ad on turn one | `minTurns` was lowered. Put it back. |
+| Ad on turn one | Either the dashboard allows it, or `minTurns` was set in code. Remove it from code. |
 | Two identical ads | `Zeekend.init` called inside a component. Use the component or provider. |
 | Doubled requests in React dev | StrictMode double-invokes effects. The SDK dedupes; harmless. |
 
@@ -141,7 +147,9 @@ Sent: the user's last message, the assistant's reply on the second pass only,
 the publisher key and placement id, coarse locale.
 
 Never sent: user id, email, phone, cookies, device ids, the system prompt, or any
-earlier turn. Text is clipped client-side before the request leaves.
+earlier turn unless `includePrevious: true` is set (then the user's previous
+message, clipped to 500 characters). Text is clipped client-side before the
+request leaves.
 
 ## Reference
 

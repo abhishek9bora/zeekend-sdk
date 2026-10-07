@@ -98,6 +98,17 @@ Only `publisherKey` and `messages` are required.
 only. At 0.35 you roughly double fill and placements feel looser. Move it on your
 own numbers, not ours.
 
+**Pacing is set from your dashboard,** not here: the first turn a placement may
+appear on, turns between placements, and placements per session. Unset, the
+first placement can appear on turn 2. Passing `minTurns`, `turnGap` or
+`maxPerSession` here still works, as a local ceiling: whichever of yours and the
+dashboard's is stricter wins.
+
+**`includePrevious`** (default `false`) also sends the user's previous message,
+clipped to 500 characters, so a follow-up like "something classic" can be matched
+to the watch it is about. It sends a turn the SDK otherwise never does, so turn it
+on only once your privacy notice covers it.
+
 ### Sponsored lines
 
 A placement arrives as a card, a catalogue, or a **sponsored line**: a short
@@ -180,7 +191,7 @@ Impressions, clicks, and what you have earned. No dashboard, no emailing us.
 | The user's last message | User id, email, phone |
 | The assistant's reply, second pass only | Cookies, device ids |
 | Your publisher key and placement id | Your system prompt |
-| Coarse locale | Anything from earlier turns |
+| Coarse locale | Earlier turns, unless you set `includePrevious` (below) |
 
 Text is clipped in your app before the request leaves: 2,000 characters of
 question, 4,000 of answer. Read `trimContext()` in the source rather than taking

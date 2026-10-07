@@ -22,7 +22,7 @@
  *     remove the label that says it is sponsored.
  */
 
-var VERSION = '0.7.1';   // must equal package.json; scripts/check.js enforces it
+var VERSION = '0.8.0';   // must equal package.json; scripts/check.js enforces it
 
 var DEFAULTS = {
   endpoint: 'https://exchange.zeekend.com/v1',
@@ -43,24 +43,30 @@ var DEFAULTS = {
   // this file. Start at 0.55 and move it based on your own numbers.
   relevance: 0.55,
 
-  /* Pacing. A conversational app that shows an ad on turn one has already
-     lost, so minTurns still runs here: it costs nothing to skip the opening
-     turns locally and there is no reason to ask the network about them.
+  /* Pacing. All three are null by default and decided by the exchange,
+     which receives the session and turn on every request and refuses a paced
+     one before any scoring happens. The publisher sets them from their
+     dashboard; unset, the exchange holds the first placement to turn 2.
 
-     turnGap and maxPerSession are null by default and decided by the
-     exchange, which already receives the session and turn on every request
-     and refuses a capped one before any scoring happens. They used to be
-     enforced here, at 2 and 3, and that made pacing a property of whichever
-     build a publisher happened to install: it could not be tuned from their
-     dashboard, and a skipped turn was invisible to the exchange, which could
-     not tell an app pacing itself from an app with no traffic.
+     minTurns was the last of the three still enforced here, at 2, until
+     0.8.0. Turn one was skipped before any request left the app, so the
+     exchange never saw it and a dashboard setting of 1 did nothing: the
+     dashboard could tighten the warm-up but never loosen it. turnGap and
+     maxPerSession moved to the exchange in 0.6.0 for the same reason.
 
-     Set either to a number to pace locally again. A local value is a
+     Set any of them to a number to pace locally again. A local value is a
      ceiling, not an override: the exchange applies its own on top, so
      whichever is stricter wins. */
-  minTurns: 2,          // no placement before the conversation warms up
+  minTurns: null,       // first turn a placement may appear on; null = the exchange decides
   turnGap: null,        // user turns between placements; null = the exchange decides
   maxPerSession: null,  // placements per session; null = the exchange decides
+
+  /* Off unless you turn it on. When true, a conversation request also
+     carries the user's previous message, clipped to 500 characters, so a
+     follow-up like "something classic" can still be matched to the "watch"
+     it is about. Off by default because it sends a turn the SDK otherwise
+     never does: turn it on only once your own privacy notice says so. */
+  includePrevious: false,
 
   // Brand safety, enforced server-side. Send whatever you would refuse to
   // have appear inside your product.
@@ -187,7 +193,7 @@ Zeekend.init = function init(config) {
 
     if (!prefetch) {
       if (!opts._secondPass) { state.turns += 1; }
-      if (state.turns < cfg.minTurns) { return Promise.resolve(skip('warmup')); }
+      if (cfg.minTurns != null && state.turns < cfg.minTurns) { return Promise.resolve(skip('warmup')); }
       if (cfg.turnGap != null &&
           state.turns - state.lastFilledTurn < cfg.turnGap) { return Promise.resolve(skip('frequency_cap')); }
       if (cfg.maxPerSession != null &&
@@ -200,7 +206,11 @@ Zeekend.init = function init(config) {
       sessionId: state.sessionId,
       placementId: opts.placementId || 'default',
       turn: state.turns,
-      context: trimContext(context),
+      /* Only when set in code. The exchange then uses it instead of its own
+         default, which would otherwise overrule a choice the publisher made
+         (a generator sets 1 on purpose). Their dashboard still comes first. */
+      minTurns: cfg.minTurns != null ? cfg.minTurns : undefined,
+      context: trimContext(context, cfg.includePrevious === true),
       dimensions: opts.dimensions || null,   // you give room, we pick the format
       relevance: opts.relevance != null ? opts.relevance : cfg.relevance,
       // Omitted entirely when unset, so an older publisher's payload is
@@ -223,7 +233,12 @@ Zeekend.init = function init(config) {
     health.requests += 1;
 
     return send(payload)
-      .then(function (slot) {
+      .then(function (res) {
+        /* A 204 the exchange explained (warmup, frequency_cap, session_cap,
+           paused) is reported under its own name rather than as no_fill, so
+           a developer checking pacing sees which rule held the turn back. */
+        var paced = res && typeof res.skipped === 'string' ? res.skipped : null;
+        var slot = paced ? null : res;
         health.latencies.push(nowMs() - t0);
         cache[key] = { t: Date.now(), slot: slot };
         // Prefetch warms the cache without representing a real ad
@@ -231,7 +246,7 @@ Zeekend.init = function init(config) {
         // already make above, applied here too so zeekend-publisher's
         // fill-rate isn't inflated by requests nothing ever saw.
         if (!prefetch) { trackEvent('request', { placementId: payload.placementId, wasFilled: !!slot }); }
-        if (!slot) { health.noFills += 1; return skip('no_fill'); }
+        if (!slot) { health.noFills += 1; return skip(paced || 'no_fill'); }
         health.fills += 1;
         slot.placementId = payload.placementId; // stashed for impression()/click(), which only receive the slot
         return fill(slot, prefetch);
@@ -757,6 +772,14 @@ function deriveContext(messages, conversationId) {
     if (list[j].role === 'assistant' && list[j].content) { answer = list[j].content; }
   }
 
+  /* The user's message before this one: what a follow-up like "something
+     classic" is about. Worked out always, sent only if the publisher turned
+     includePrevious on; trimContext() is where that is decided. */
+  var previous = null;
+  for (var k = userIndex - 1; k >= 0; k--) {
+    if (list[k].role === 'user') { previous = list[k].content; break; }
+  }
+
   return {
     // Stable for the turn: derived from the question's position and text, so it
     // does not change as the assistant streams tokens after it.
@@ -765,6 +788,7 @@ function deriveContext(messages, conversationId) {
       type: 'conversation',
       question: lastUser.content,
       answer: answer,
+      previous: previous,
       conversationId: conversationId
     }
   };
@@ -801,11 +825,16 @@ function hash(s) {
  * ids, no emails, no device fingerprints, no system prompt. If you would not
  * put a field in a screenshot, it does not belong here.
  */
-function trimContext(c) {
+/* The only door conversation text leaves through. `previous` is dropped here
+   unless the publisher turned includePrevious on, whatever built the context:
+   deriveContext always works it out, so the decision is made in one place
+   rather than trusted to every caller. */
+function trimContext(c, includePrevious) {
   var out = { type: c.type };
   if (c.type === 'conversation') {
     out.question = clip(c.question, 2000);
     out.answer = c.answer ? clip(c.answer, 4000) : null;
+    if (includePrevious && c.previous) { out.previous = clip(c.previous, 500); }
     if (c.conversationId) { out.conversationId = String(c.conversationId).slice(0, 128); }
   } else if (c.type === 'article') {
     out.title = clip(c.title, 300);
@@ -829,7 +858,10 @@ function post(url, body, timeoutMs, extraHeaders) {
     signal: ctl ? ctl.signal : undefined
   }).then(function (r) {
     if (timer) { clearTimeout(timer); }
-    if (r.status === 204) { return null; }         // no fill. not an error.
+    if (r.status === 204) {                        // no fill. not an error.
+      var why = r.headers && r.headers.get ? r.headers.get('x-zeekend-skip') : null;
+      return why ? { skipped: why } : null;
+    }
     if (!r.ok) { throw new Error('http ' + r.status); }
     return r.json();
   }, function (e) {
