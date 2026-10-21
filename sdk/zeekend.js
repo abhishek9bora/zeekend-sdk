@@ -22,7 +22,7 @@
  *     remove the label that says it is sponsored.
  */
 
-var VERSION = '0.8.0';   // must equal package.json; scripts/check.js enforces it
+var VERSION = '0.8.1';   // must equal package.json; scripts/check.js enforces it
 
 var DEFAULTS = {
   endpoint: 'https://exchange.zeekend.com/v1',
@@ -283,6 +283,11 @@ Zeekend.init = function init(config) {
     var mount = opts.mount;
     var el = null;
     var settled = false;
+    /* Set the moment the first request comes back with an ad, not when it is
+       drawn. Drawing can wait up to four seconds for the answer to appear, and
+       an answer() call landing in that wait used to see settled still false,
+       fetch a second ad, and draw both under one answer. */
+    var filled = false;
 
     var base = {
       placementId: opts.placementId || 'default',
@@ -320,6 +325,7 @@ Zeekend.init = function init(config) {
         conversationId: opts.conversationId
       }
     })).then(function (r) {
+      if (r.slot) { filled = true; }
       if (r.slot && mount) { renderWhenSettled(r.slot); }
       if (opts.onFill && r.slot) { opts.onFill(r.slot); }
       if (opts.onNoFill && !r.slot) { opts.onNoFill(r.reason); }
@@ -332,7 +338,7 @@ Zeekend.init = function init(config) {
       /** Call when your assistant's answer is complete. Second shot at the slot. */
       answer: function (answerText) {
         return first.then(function (r) {
-          if (settled) { return r; }        // already filled on the question
+          if (settled || filled) { return r; }   // already filled on the question
           return request(assign({}, base, {
             _secondPass: true,
             context: {

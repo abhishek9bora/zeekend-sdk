@@ -1,6 +1,6 @@
 {
   "name": "@zeekend/sdk",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "Sponsored product placements for AI apps. Contextual, labeled, no user data.",
   "type": "module",
   "main": "./sdk/zeekend.js",
@@ -61,9 +61,10 @@
   },
   "scripts": {
     "build": "node scripts/build.js",
-    "test": "node scripts/check.js"
+    "test": "node scripts/check.js && node scripts/behaviour.js"
   },
   "devDependencies": {
-    "esbuild": "0.28.1"
+    "esbuild": "0.28.1",
+    "jsdom": "25.0.1"
   }
 }
