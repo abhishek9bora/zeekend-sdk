@@ -4,6 +4,20 @@ Every released version, newest first. Releases are also on GitHub with the
 same notes, and each npm publish carries a provenance attestation tying the
 tarball to the commit it was built from.
 
+## 0.8.1 — 2026-10-21
+
+**Fixed: one question could show two ads.** When the first ad arrived before
+the assistant's answer was on screen, `serve()` held it back (up to four
+seconds) so it would not land in an empty space, and only counted the question
+as filled once it was drawn. If `answer()` ran during that wait it saw an
+unfilled question, fetched a second ad, and both were drawn under one answer.
+The question now counts as filled the moment its first ad arrives. Apps the
+exchange paces with a gap of one turn or more were not affected in practice,
+since it refused the second ad as a repeat in the same turn; apps with a gap
+of 0 were.
+
+No change to your code or to any option. Nothing else changes.
+
 ## 0.8.0 — 2026-10-06
 
 **Changed: the first turn a placement may appear on is now set from your
