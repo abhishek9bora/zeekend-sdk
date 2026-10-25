@@ -65,5 +65,19 @@ const fail = msg => { throw new Error(msg); };
   if (units(mount) !== 1) fail('an ad pending at destroy() was not drawn; React Strict Mode would show nothing');
 }
 
-console.log('ok: one ad per question, answer pass on an empty first pass, pending ad survives destroy()');
+/* No relevance floor unless the publisher sets one. Until 0.8.2 every
+   request carried 0.55, which overruled each campaign's own lower cutoff. */
+{
+  const sent = [];
+  const zk = Zeekend.client({ publisherKey: 'pub_live_behaviour_relevance', transport: async (p) => { sent.push(p); return { skipped: 'no_fill' }; } });
+  await zk.request({ context: { type: 'conversation', question: 'which laptop?' } });
+  if ('relevance' in sent[0] && sent[0].relevance !== undefined) fail(`a request with no floor set sent relevance ${sent[0].relevance}`);
+  await zk.request({ relevance: 0.7, context: { type: 'conversation', question: 'which laptop?' } });
+  if (sent[1].relevance !== 0.7) fail(`a per-request floor of 0.7 was sent as ${sent[1].relevance}`);
+  const strict = Zeekend.client({ publisherKey: 'pub_live_behaviour_relevance_cfg', relevance: 0.6, transport: async (p) => { sent.push(p); return { skipped: 'no_fill' }; } });
+  await strict.request({ context: { type: 'conversation', question: 'which laptop?' } });
+  if (sent[2].relevance !== 0.6) fail(`a configured floor of 0.6 was sent as ${sent[2].relevance}`);
+}
+
+console.log('ok: one ad per question, answer pass on an empty first pass, pending ad survives destroy(), relevance sent only when set');
 process.exit(0);

@@ -22,7 +22,7 @@
  *     remove the label that says it is sponsored.
  */
 
-var VERSION = '0.8.1';   // must equal package.json; scripts/check.js enforces it
+var VERSION = '0.8.2';   // must equal package.json; scripts/check.js enforces it
 
 var DEFAULTS = {
   endpoint: 'https://exchange.zeekend.com/v1',
@@ -38,10 +38,12 @@ var DEFAULTS = {
   zeekendAppKey: null,
   trackingEndpoint: 'https://publisher.zeekend.com',
 
-  // Publisher-side quality floor, 0 to 1. Higher means fewer, better matches
-  // and a lower fill rate. This is the single most consequential setting in
-  // this file. Start at 0.55 and move it based on your own numbers.
-  relevance: 0.55,
+  /* Publisher-side quality floor, 0 to 1: a stricter floor than the
+     exchange's own. Null by default, so it is sent only when you set it, and
+     each campaign's own cutoff applies. Until 0.8.2 it defaulted to 0.55 and
+     was sent on every request, which overruled every lower cutoff the
+     exchange set. You can also set it from your dashboard. */
+  relevance: null,
 
   /* Pacing. All three are null by default and decided by the exchange,
      which receives the session and turn on every request and refuses a paced
@@ -212,7 +214,8 @@ Zeekend.init = function init(config) {
       minTurns: cfg.minTurns != null ? cfg.minTurns : undefined,
       context: trimContext(context, cfg.includePrevious === true),
       dimensions: opts.dimensions || null,   // you give room, we pick the format
-      relevance: opts.relevance != null ? opts.relevance : cfg.relevance,
+      // Omitted unless set, in code here or per request.
+      relevance: opts.relevance != null ? opts.relevance : (cfg.relevance != null ? cfg.relevance : undefined),
       // Omitted entirely when unset, so an older publisher's payload is
       // byte-for-byte what it was and the exchange applies its own default.
       accepts: opts.accepts || cfg.accepts || undefined,

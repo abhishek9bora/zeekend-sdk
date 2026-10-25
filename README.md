@@ -87,16 +87,17 @@ Only `publisherKey` and `messages` are required.
   publisherKey="pub_live_..."
   messages={messages}
   conversationId={thread.id}
-  relevance={0.55}                    // quality floor 0-1. higher = fewer, better
+  relevance={0.6}                     // optional floor 0-1; unset, each campaign's own applies
   dimensions={{ maxWidth: 640 }}      // leave one axis unbounded
   blockCategories={['gambling', 'crypto']}
   onNoFill={reason => showBackupNetwork()}
 />
 ```
 
-`relevance` is the setting that matters. At 0.55 you serve on strong matches
-only. At 0.35 you roughly double fill and placements feel looser. Move it on your
-own numbers, not ours.
+`relevance` is optional. Leave it out and each campaign's own cutoff applies,
+which is what the exchange tunes. Set it, here or from your dashboard, only to
+be stricter than that: higher means fewer, better matches and lower fill. Move
+it on your own numbers, not ours.
 
 **Pacing is set from your dashboard,** not here: the first turn a placement may
 appear on, turns between placements, and placements per session. Unset, the

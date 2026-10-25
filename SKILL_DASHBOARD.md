@@ -163,7 +163,6 @@ purely additive — see Step 1.
   zeekendAppKey="..."                 // optional — see Step 1
   messages={messages}
   conversationId={thread.id}
-  relevance={0.55}                    // quality floor 0-1
   dimensions={{ maxWidth: 640 }}      // leave one axis unbounded
   blockCategories={['gambling', 'crypto']}
   onNoFill={reason => {}}             // waterfall to another network
