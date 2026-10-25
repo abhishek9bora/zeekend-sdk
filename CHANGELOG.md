@@ -4,6 +4,16 @@ Every released version, newest first. Releases are also on GitHub with the
 same notes, and each npm publish carries a provenance attestation tying the
 tarball to the commit it was built from.
 
+## 0.8.3 — 2026-10-25
+
+**New: the conversation stays pinned to the bottom when an ad appears
+(`keepPinned`, on by default).** The ad is drawn after your app has scrolled
+to the end of the answer, so in a chat it landed just below the fold: readers
+saw half of it, and a view is only counted once it has been half visible for a
+second. When the reader was at the bottom just before the ad is drawn, the SDK
+now scrolls it into view; a reader who had scrolled up is left where they are.
+Set `keepPinned: false` if your app scrolls to new content itself.
+
 ## 0.8.2 — 2026-10-25
 
 **Changed: `relevance` is no longer sent unless you set it.** It defaulted to

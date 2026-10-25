@@ -79,5 +79,33 @@ const fail = msg => { throw new Error(msg); };
   if (sent[2].relevance !== 0.6) fail(`a configured floor of 0.6 was sent as ${sent[2].relevance}`);
 }
 
-console.log('ok: one ad per question, answer pass on an empty first pass, pending ad survives destroy(), relevance sent only when set');
+/* The ad is drawn after the app has scrolled to the end of the answer. A
+   reader at the bottom is kept at the bottom, so the ad comes into view; a
+   reader who scrolled up is left where they are; keepPinned: false opts out. */
+{
+  const scenario = async (key, opts, scrolledUp) => {
+    const box = document.createElement('div');
+    box.style.overflowY = 'auto';
+    Object.defineProperty(box, 'clientHeight', { value: 600 });
+    Object.defineProperty(box, 'scrollHeight', { value: 2000 });
+    box.scrollTop = scrolledUp ? 500 : 1400;            // 1400 + 600 = the bottom
+    const mount = document.createElement('div');
+    mount.textContent = 'assistant answer';
+    box.appendChild(mount);
+    document.body.appendChild(box);
+    let scrolled = 0;
+    dom.window.HTMLElement.prototype.scrollIntoView = function () { scrolled += 1; };
+    const zk = Zeekend.client(Object.assign({ publisherKey: key, transport: async () => slot(1) }, opts));
+    const turn = zk.serve({ mount, question: 'which laptop should I buy?' });
+    await turn.first;
+    await sleep(50);
+    if (units(mount) !== 1) fail(`${key}: the ad was not drawn`);
+    return scrolled;
+  };
+  if ((await scenario('pub_live_pin_bottom', {}, false)) !== 1) fail('a reader at the bottom was not kept at the bottom when the ad appeared');
+  if ((await scenario('pub_live_pin_up', {}, true)) !== 0) fail('a reader who scrolled up was moved when the ad appeared');
+  if ((await scenario('pub_live_pin_off', { keepPinned: false }, false)) !== 0) fail('keepPinned: false still scrolled');
+}
+
+console.log('ok: one ad per question, answer pass on an empty first pass, pending ad survives destroy(), relevance sent only when set, chat kept pinned when the ad appears');
 process.exit(0);

@@ -110,6 +110,12 @@ clipped to 500 characters, so a follow-up like "something classic" can be matche
 to the watch it is about. It sends a turn the SDK otherwise never does, so turn it
 on only once your privacy notice covers it.
 
+**`keepPinned`** (default `true`) keeps the conversation at the bottom when the ad
+appears. The ad is drawn after your app has scrolled to the end of the answer, so
+without this it lands just below the fold. It only scrolls when the reader was
+already at the bottom; someone who scrolled up to reread is left where they are.
+Set `false` if your app scrolls to new content itself.
+
 ### Sponsored lines
 
 A placement arrives as a card, a catalogue, or a **sponsored line**: a short

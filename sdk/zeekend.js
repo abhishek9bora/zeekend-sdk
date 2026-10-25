@@ -22,7 +22,7 @@
  *     remove the label that says it is sponsored.
  */
 
-var VERSION = '0.8.2';   // must equal package.json; scripts/check.js enforces it
+var VERSION = '0.8.3';   // must equal package.json; scripts/check.js enforces it
 
 var DEFAULTS = {
   endpoint: 'https://exchange.zeekend.com/v1',
@@ -69,6 +69,15 @@ var DEFAULTS = {
      it is about. Off by default because it sends a turn the SDK otherwise
      never does: turn it on only once your own privacy notice says so. */
   includePrevious: false,
+
+  /* Keep the conversation pinned to the bottom when the ad appears. The ad
+     is drawn after your app has scrolled to the end of the answer, so in a
+     chat it landed just below the fold: readers saw half of it, and a view
+     is only counted at half visible for a second. When the reader was at the
+     bottom just before the ad is drawn, the SDK scrolls it into view; when
+     they had scrolled up to reread, it leaves them where they are. Set false
+     if your app manages this itself. */
+  keepPinned: true,
 
   // Brand safety, enforced server-side. Send whatever you would refuse to
   // have appear inside your product.
@@ -499,7 +508,9 @@ Zeekend.init = function init(config) {
     rep.onclick = function () { report(slot, 'user'); rep.textContent = 'Reported'; rep.disabled = true; };
     wrap.appendChild(rep);
 
+    var pinned = cfg.keepPinned !== false && atBottom(mount);
     (mount || document.body).appendChild(wrap);
+    if (pinned) { revealAtBottom(wrap); }
     observe(wrap, function () { impression(slot); });
     return wrap;
   }
@@ -576,7 +587,9 @@ Zeekend.init = function init(config) {
     tail.appendChild(rep);
     p.appendChild(tail);
 
+    var pinned = cfg.keepPinned !== false && atBottom(mount);
     (mount || document.body).appendChild(p);
+    if (pinned) { revealAtBottom(p); }
     observe(p, function () { impression(slot); });
     return p;
   }
@@ -652,6 +665,32 @@ Zeekend.init = function init(config) {
       t.accent + ';border:1px solid ' + t.accent + ';border-radius:6px;padding:3px 10px;';
     a.onclick = function () { click(slot); };
     return a;
+  }
+
+  /* The element that scrolls the conversation: the nearest ancestor that
+     scrolls vertically, else the page. */
+  function scroller(node) {
+    for (var n = node; n && n !== document.body && n !== document.documentElement; n = n.parentElement) {
+      var oy = (window.getComputedStyle ? window.getComputedStyle(n).overflowY : '') || '';
+      if (/(auto|scroll|overlay)/.test(oy) && n.scrollHeight > n.clientHeight) { return n; }
+    }
+    return document.scrollingElement || document.documentElement;
+  }
+
+  /* Whether the reader is at the bottom of the conversation, give or take a
+     line: they were following along, not reading something further up. */
+  function atBottom(mount) {
+    try {
+      var s = scroller(mount || document.body);
+      var view = s === document.scrollingElement || s === document.documentElement ? window.innerHeight : s.clientHeight;
+      return s.scrollHeight - s.scrollTop - view <= 120;
+    } catch (e) { return false; }
+  }
+
+  function revealAtBottom(node) {
+    try {
+      if (node.scrollIntoView) { node.scrollIntoView({ block: 'end', behavior: 'smooth' }); }
+    } catch (e) { /* a page that cannot scroll is not an error */ }
   }
 
   /** Impression fires on 50% visible for one continuous second. IAB standard. */
