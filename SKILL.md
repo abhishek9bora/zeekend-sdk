@@ -128,6 +128,10 @@ Only `publisherKey` and `messages` are required.
 
 Use these when the component genuinely cannot apply. Do not offer them otherwise.
 
+**Native app (Swift, Kotlin, Flutter) or a server.** Do not install the npm
+package. Call the HTTP API directly, following
+https://exchange.zeekend.com/rest.md, and leave `origins` empty on the key.
+
 **React Native, or custom rendering.** `useZeekendSlot({ publisherKey, messages })`
 returns a `slot`; render it yourself, then call `zk.impression(slot)` from your
 own viewability logic and `zk.click(slot)` on click. Keep `slot.disclosure`.
