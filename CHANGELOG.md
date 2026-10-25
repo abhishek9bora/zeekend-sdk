@@ -4,6 +4,20 @@ Every released version, newest first. Releases are also on GitHub with the
 same notes, and each npm publish carries a provenance attestation tying the
 tarball to the commit it was built from.
 
+## 0.8.2 — 2026-10-25
+
+**Changed: `relevance` is no longer sent unless you set it.** It defaulted to
+0.55 and went out with every request, and the exchange applies the stricter of
+your floor and each campaign's own, so 0.55 overruled every lower cutoff: when
+affiliate brands moved to 0.30, no app on the SDK saw it. Now it defaults to
+`null` and each campaign's cutoff applies. To be stricter, set `relevance`
+in code or "Require a stronger match" in your dashboard.
+
+If you copied `relevance={0.55}` from an earlier README, that value is now
+treated as your choice and still applies. Remove it to use the campaigns' own
+cutoffs. (The exchange already ignores a bare 0.55 from SDKs before 0.8.2, so
+apps that have not updated get the same behaviour.)
+
 ## 0.8.1 — 2026-10-21
 
 **Fixed: one question could show two ads.** When the first ad arrived before
