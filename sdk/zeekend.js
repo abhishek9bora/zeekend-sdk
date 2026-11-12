@@ -22,7 +22,7 @@
  *     remove the label that says it is sponsored.
  */
 
-var VERSION = '0.8.3';   // must equal package.json; scripts/check.js enforces it
+var VERSION = '0.8.4';   // must equal package.json; scripts/check.js enforces it
 
 var DEFAULTS = {
   endpoint: 'https://exchange.zeekend.com/v1',
@@ -454,12 +454,16 @@ Zeekend.init = function init(config) {
     var picked = readableColors(mount);
     var t = assign({
       accent: picked.accent, text: picked.text, muted: picked.muted,
-      border: picked.border, radius: '10px'
+      border: picked.border, surface: picked.surface, radius: '14px'
     }, opts.theme || {});
+    /* The card's call to action is in the text colour unless the app gives
+       its own accent: a stock orange beside somebody else's brand colour
+       reads as a warning, not an invitation. */
+    t.cta = (opts.theme && opts.theme.accent) || t.text;
 
     /* Inline is not a bordered unit, so it leaves before the box is built.
-       Everything below assumes a card: a border, a padded box, a disclosure
-       stacked above the content and a Report button floated into the corner.
+       Everything below assumes a card: a soft padded box with the advertiser
+       and the disclosure on one line above the content.
        An inline placement is a sentence in the run of the page and gets none
        of that.
 
@@ -473,15 +477,19 @@ Zeekend.init = function init(config) {
 
     var wrap = el('div');
     wrap.setAttribute('data-zeekend-slot', slot.slotId);
-    wrap.style.cssText = 'margin-top:12px;border:1px solid ' + t.border + ';border-radius:' +
-      t.radius + ';padding:10px 12px;font:inherit;line-height:1.45;position:relative;' +
+    /* No outline: a tinted surface sits inside the host's design instead of
+       looking pasted onto it. */
+    wrap.style.cssText = 'margin-top:12px;background:' + t.surface + ';border-radius:' +
+      t.radius + ';padding:12px;font:inherit;line-height:1.45;' +
       'color:' + t.text + ';';
 
-    // Disclosure. Not optional, not restylable away.
+    /* The advertiser, then the disclosure, on one quiet line: "Flowers Fast ·
+       Sponsored". The disclosure is not optional and not restylable away; it
+       is just no longer shouted in capitals. */
     var lbl = el('div');
-    lbl.textContent = slot.disclosure || 'Sponsored';
-    lbl.style.cssText = 'font-size:10px;letter-spacing:.12em;text-transform:uppercase;' +
-      'opacity:.6;margin-bottom:6px;';
+    lbl.style.cssText = 'font-size:12px;color:' + t.muted + ';margin-bottom:6px;';
+    if (slot.advertiser) { lbl.appendChild(document.createTextNode(slot.advertiser + ' \u00b7 ')); }
+    lbl.appendChild(document.createTextNode(slot.disclosure || 'Sponsored'));
     wrap.appendChild(lbl);
 
     if (slot.format === 'catalog' && slot.items && slot.items.length) {
@@ -490,23 +498,9 @@ Zeekend.init = function init(config) {
       if (slot.headline) { wrap.appendChild(text('div', slot.headline, 'font-weight:600;')); }
       if (slot.body) { wrap.appendChild(text('div', slot.body, 'opacity:.75;margin:2px 0 9px;font-size:.95em;')); }
       wrap.appendChild(catalog(slot, t));
-      if (slot.advertiser) {
-        wrap.appendChild(text('div', slot.advertiser,
-          'font-size:11px;opacity:.5;margin-top:7px;color:' + t.muted + ';'));
-      }
     } else {
       wrap.appendChild(card(slot, t));
     }
-
-    // "Report this ad". Cheap, and it is the clearest signal to your users
-    // that you did not sell them out.
-    var rep = el('button');
-    rep.textContent = 'Report';
-    rep.setAttribute('aria-label', 'Report this ad');
-    rep.style.cssText = 'position:absolute;top:8px;right:10px;background:none;border:0;' +
-      'font:inherit;font-size:10px;opacity:.4;cursor:pointer;color:' + t.muted + ';';
-    rep.onclick = function () { report(slot, 'user'); rep.textContent = 'Reported'; rep.disabled = true; };
-    wrap.appendChild(rep);
 
     var pinned = cfg.keepPinned !== false && atBottom(mount);
     (mount || document.body).appendChild(wrap);
@@ -562,9 +556,7 @@ Zeekend.init = function init(config) {
        as a typo on the publisher's page. */
     p.appendChild(document.createTextNode(/[.!?]$/.test(slot.inline.trim()) ? ' ' : '. '));
 
-    /* Disclosure and Report travel together and never split across a line
-       break. Left loose, Report wraps onto its own line and reads as a stray
-       word under the answer rather than as part of the label. */
+    /* The label never splits across a line break from the claim before it. */
     var tail = el('span');
     tail.style.cssText = 'white-space:nowrap;';
 
@@ -574,17 +566,6 @@ Zeekend.init = function init(config) {
     lbl.style.cssText = 'font-size:.72em;letter-spacing:.08em;' +
       'text-transform:uppercase;opacity:.6;color:' + t.muted + ';';
     tail.appendChild(lbl);
-
-    /* Report, as the card has it. A floated button would be wrong on a line
-       of running text, so it sits after the label at the same weight. */
-    var rep = el('button');
-    rep.textContent = 'Report';
-    rep.setAttribute('aria-label', 'Report this ad');
-    rep.style.cssText = 'margin-left:.5em;background:none;border:0;padding:0;font:inherit;' +
-      'font-size:.72em;letter-spacing:.08em;text-transform:uppercase;opacity:.4;' +
-      'cursor:pointer;color:' + t.muted + ';';
-    rep.onclick = function () { report(slot, 'user'); rep.textContent = 'Reported'; rep.disabled = true; };
-    tail.appendChild(rep);
     p.appendChild(tail);
 
     var pinned = cfg.keepPinned !== false && atBottom(mount);
@@ -596,13 +577,16 @@ Zeekend.init = function init(config) {
 
   function card(slot, t) {
     var box = el('div');
-    box.style.cssText = 'display:flex;gap:10px;align-items:flex-start;';
+    box.style.cssText = 'display:flex;gap:12px;align-items:center;';
 
     var cardImg = safeUrl(slot.image);
     if (cardImg) {
       var img = el('img');
       img.src = cardImg; img.alt = '';
-      img.style.cssText = 'width:56px;height:56px;object-fit:cover;border-radius:6px;flex:0 0 auto;';
+      /* Contained on white rather than cropped: product shots are taken on
+         white, and cropping cut off the product itself. */
+      img.style.cssText = 'width:76px;height:76px;object-fit:contain;background:#fff;' +
+        'border-radius:10px;flex:0 0 auto;';
       img.onerror = function () { img.style.display = 'none'; };
       box.appendChild(img);
     }
@@ -610,15 +594,18 @@ Zeekend.init = function init(config) {
     var body = el('div');
     body.style.cssText = 'min-width:0;flex:1;';
     body.appendChild(text('div', slot.headline, 'font-weight:600;'));
-    if (slot.body) { body.appendChild(text('div', slot.body, 'opacity:.75;margin-top:2px;font-size:.95em;')); }
+    /* Two lines at most, so a long description cannot turn the ad into the
+       biggest thing on screen. */
+    if (slot.body) {
+      body.appendChild(text('div', slot.body, 'opacity:.75;margin-top:2px;font-size:.95em;' +
+        'display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;'));
+    }
 
     var row = el('div');
-    row.style.cssText = 'margin-top:8px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;';
-    if (slot.price) { row.appendChild(text('span', slot.price, 'font-weight:600;font-size:.95em;')); }
+    row.style.cssText = 'margin-top:8px;display:flex;gap:10px;align-items:center;' +
+      'justify-content:space-between;flex-wrap:wrap;';
+    row.appendChild(text('span', slot.price || '', 'font-size:.95em;color:' + t.muted + ';'));
     row.appendChild(cta(slot, t));
-    if (slot.advertiser) {
-      row.appendChild(text('span', slot.advertiser, 'font-size:11px;opacity:.5;color:' + t.muted + ';'));
-    }
     body.appendChild(row);
     box.appendChild(body);
     return box;
@@ -660,9 +647,11 @@ Zeekend.init = function init(config) {
     if (href) { a.href = href; }
     a.target = '_blank';
     a.rel = 'sponsored noopener noreferrer';   // never let an ad pass link equity
-    a.textContent = slot.cta || 'View';
-    a.style.cssText = 'display:inline-block;font-size:12px;text-decoration:none;color:' +
-      t.accent + ';border:1px solid ' + t.accent + ';border-radius:6px;padding:3px 10px;';
+    /* A plain link with an arrow, not an outlined button: calmer, and it
+       still reads as the thing to tap. */
+    a.textContent = (slot.cta || 'View') + ' \u2192';
+    a.style.cssText = 'display:inline-block;font-size:.95em;font-weight:600;text-decoration:none;' +
+      'color:' + (t.cta || t.accent) + ';';
     a.onclick = function () { click(slot); };
     return a;
   }
@@ -956,8 +945,10 @@ function readableColors(mount) {
      close to unreadable on near-black, which matters more for inline than
      it ever did for a card: there the accent is a small button, here it is
      the entire advertiser claim. */
-  var LIGHT = { text: '#111827', muted: '#6b7280', border: 'rgba(120,120,120,.28)', accent: '#c2410c' };
-  var DARK = { text: '#f3f4f6', muted: '#9ca3af', border: 'rgba(180,180,180,.30)', accent: '#fb923c' };
+  var LIGHT = { text: '#111827', muted: '#6b7280', border: 'rgba(120,120,120,.28)', accent: '#c2410c',
+    surface: 'rgba(120,120,120,.07)' };
+  var DARK = { text: '#f3f4f6', muted: '#9ca3af', border: 'rgba(180,180,180,.30)', accent: '#fb923c',
+    surface: 'rgba(255,255,255,.06)' };
   try {
     var node = mount || document.body;
     while (node && node.nodeType === 1) {

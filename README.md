@@ -218,8 +218,9 @@ If in doubt, leave it out — nothing depends on it.
 
 ## Ad safety
 
-Every unit ships with a Report control, no integration work. Reports reach us and
-the advertiser is pulled from your app.
+If an ad looks wrong for your app, tell us at hello@zeekend.com and we pull the
+advertiser from it, or block the advertiser yourself in your dashboard. To give
+your own users a way to flag an ad, call `zk.report(slot, reason)` from your UI.
 
 Generated copy is fenced by each advertiser's own claim rules: required phrases
 must appear verbatim, banned words are stripped server-side after generation. We
