@@ -4,6 +4,27 @@ Every released version, newest first. Releases are also on GitHub with the
 same notes, and each npm publish carries a provenance attestation tying the
 tarball to the commit it was built from.
 
+## 0.8.4 — 2026-11-12
+
+**Changed: a calmer default card.** The default unit now sits inside your app
+instead of on top of it:
+
+- No outline. A soft tinted background, with rounder corners.
+- The advertiser and the disclosure on one quiet line ("Flowers Fast ·
+  Sponsored") instead of a capitalised label, with the advertiser no longer
+  repeated at the bottom.
+- A larger image (76px), shown whole on white rather than cropped.
+- The description is held to two lines.
+- The call to action is a plain link with an arrow ("Shop →") in your text
+  colour, instead of an orange outlined button. Pass `theme: { accent }` (on
+  `attach()`, `render()` or `<ZeekendSlot>`) to colour it with your brand.
+
+**Removed: the Report button** on cards and inline placements. `report(slot,
+reason)` is still there for apps that want their own control.
+
+Every ad is still labelled. Nothing about requests, impressions or clicks
+changes.
+
 ## 0.8.3 — 2026-10-25
 
 **New: the conversation stays pinned to the bottom when an ad appears
